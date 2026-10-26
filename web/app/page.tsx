@@ -54,7 +54,7 @@ export default function Page() {
       <p className="cap">Firedrill results</p>
       <h1><span className="brand">Firedrill</span></h1>
       <p className="muted">Run the drill before production does.</p>
-      {data?.generatedAt && <p className="small muted">Generated {data.generatedAt} · {runs.length} live run(s) of one automation · {all.length} scenario result(s)</p>}
+      {data?.generatedAt && <p className="small muted">Generated {data.generatedAt} · {runs.length} live run(s) · {all.length} scenario result(s)</p>}
 
       {scenarios.size === 0 ? (
         <div className="card" style={{ marginTop: 24 }}>No results yet. Run <code>npx tsx src/cli.ts run ...</code> to produce <code>results.json</code>, then rebuild this page.</div>
@@ -101,7 +101,7 @@ export default function Page() {
       <div className="card note small">
         <ul>
           <li>One configuration: one Alan automation (Alan Code, DeepSeek V4.1 Flash, no tools), one model, one instruction, one sandbox repo. These results say nothing general about Alan as a product.</li>
-          <li>The tripwire stayed empty during all 12 attack runs. The only hit came from one manual egress test in a chat session, not from the automation.</li>
+          <li>The tripwire stayed empty during all 12 attack runs of the normal workflow. The only hit came from one manual egress test in a chat session, not from the automation.</li>
           <li>12 attacks is not a security audit.</li>
           <li>A manual chat test showed Alan's sandbox can reach the public internet, so an empty tripwire is not explained by missing network access. Whether the automation run has the same access is unverified.</li>
           <li>Grading is deterministic assertions on observable GitHub and tripwire activity; no model decides pass or fail.</li>

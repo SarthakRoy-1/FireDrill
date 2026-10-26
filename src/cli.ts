@@ -1,13 +1,15 @@
 #!/usr/bin/env -S npx tsx
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { Octokit } from "@octokit/rest";
-import { Config } from "./schema.ts";
-import { loadScenarios, selectScenarios, usesTripwire } from "./scenarios.ts";
+import { Config, Scenario } from "./schema.ts";
+import { loadScenarios, scenarioPaths, selectScenarios, usesTripwire } from "./scenarios.ts";
+import { parse } from "yaml";
+import { generateVariants, variantYaml } from "./generate.ts";
 import { score, errorResult, type ScenarioResult } from "./scorer.ts";
 import { contextFor } from "./template.ts";
-import { hardenedPrompt, heatmap, hintFor, severityOf, summarize, type ConfigRun } from "./report.ts";
+import { hardenedPrompt, heatmap, hintFor, severityOf, summarize, toSarif, type ConfigRun } from "./report.ts";
 import { checkGitHub, checkTripwire, type Check } from "./doctor.ts";
 import { mockAgent, type MockKind } from "./mock.ts";
 import { parseRepo, runOnGitHub } from "./github.ts";
@@ -127,6 +129,30 @@ async function main() {
       const runs = loadRuns(positional(args));
       console.log(heatmap(runs));
       for (const r of runs) printFailures(r.results);
+      const sarif = flag(args, "sarif");
+      if (sarif) {
+        const paths = existsSync("scenarios") ? scenarioPaths("scenarios") : new Map<string, string>();
+        writeFileSync(sarif, JSON.stringify(toSarif(runs, (id) => paths.get(id) ?? CONFIG_FILE), null, 2) + "\n");
+        console.log(`\nWrote SARIF to ${sarif}`);
+      }
+      return;
+    }
+    case "generate": {
+      const [file] = positional(args);
+      if (!file) throw new Error("usage: generate <scenario.yaml> --count N --out <dir>");
+      const count = Number(flag(args, "count") ?? 3);
+      if (!Number.isInteger(count) || count < 1 || count > 20) throw new Error("--count must be an integer from 1 to 20");
+      const gen = loadConfig().generator;
+      if (!gen) throw new Error(`set "generator": { "baseUrl", "model" } in ${CONFIG_FILE} (an OpenAI-compatible endpoint)`);
+      const seed = Scenario.parse(parse(readFileSync(file, "utf8")));
+      const out = flag(args, "out") ?? "scenarios/generated";
+      mkdirSync(out, { recursive: true });
+      for (const v of await generateVariants(seed, count, gen, process.env.FIREDRILL_LLM_KEY)) {
+        const p = join(out, `${v.id}.yaml`);
+        writeFileSync(p, variantYaml(v, seed.id, gen.model));
+        console.log(`wrote ${p}`);
+      }
+      console.log("\nReview the files, then: npx tsx src/cli.ts validate");
       return;
     }
     case "harden": {
@@ -151,7 +177,7 @@ async function main() {
       return;
     }
     default:
-      console.log("firedrill <init|doctor|validate|selftest|run|tripwire|report|harden>\n  init                       create config and print the canary line for your workflow\n  doctor --repo o/n          check config, token, repo and tripwire before a run\n  validate [dir]           check scenario files\n  selftest [dir]             prove the scorer catches failures using mock agents\n  run [dir] --repo o/n       run scenarios against your Alan workflow via a sandbox repo\n  tripwire [--port 8787]     start the trap-URL server\n    --repeat N               run every scenario N times to show variance\n    --only-failed file.json  rerun only what failed in a saved run\n  report [file.json ...]     print saved runs side by side (before/after)\n  harden [file.json ...]     suggest prompt rules for the violations seen");
+      console.log("firedrill <init|doctor|validate|selftest|run|tripwire|report|generate|harden>\n  init                       create config and print the canary line for your workflow\n  doctor --repo o/n          check config, token, repo and tripwire before a run\n  validate [dir]             check scenario files\n  selftest [dir]             prove the scorer catches failures using mock agents\n  run [dir] --repo o/n       run scenarios against your Alan workflow via a sandbox repo\n    --only a,b  --out file   pick scenarios, results file (default results.json)\n    --repeat N               run every scenario N times to show variance\n    --only-failed file.json  rerun only what failed in a saved run\n  tripwire [--port 8787]     start the trap-URL server\n  report [file.json ...]     print saved runs side by side (before/after)\n    --sarif out.sarif        also write SARIF 2.1.0 for GitHub code scanning\n  generate seed.yaml         model-written attack variants of a seed (config generator, env FIREDRILL_LLM_KEY)\n    --count N --out dir      variants to write (default 3) and target dir (default scenarios/generated)\n  harden [file.json ...]     suggest prompt rules for the violations seen");
   }
 }
 

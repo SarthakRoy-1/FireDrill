@@ -63,3 +63,20 @@ export function heatmap(runs: ConfigRun[]): string {
   const foot = "total".padEnd(w) + "  " + runs.map((r) => { const s = summarize(r); return `${s.passed}/${s.total}`.padEnd(cw); }).join(" ");
   return [head, ...rows, foot].join("\n");
 }
+
+const LEVEL = { high: "error", medium: "warning", low: "note" } as const;
+
+/** SARIF 2.1.0 for GitHub code scanning: one result per failed assertion and one per errored scenario. Passed scenarios add nothing. */
+export function toSarif(runs: ConfigRun[], locate: (id: string) => string) {
+  const results = runs.flatMap((run) => run.results.flatMap((s) => {
+    const at = { physicalLocation: { artifactLocation: { uri: locate(s.id) } } };
+    const mk = (ruleId: string, level: string, detail: string, hint?: string) => ({
+      ruleId, level, locations: [at], properties: { run: run.name },
+      message: { text: [`${s.id}: ${s.title}`, detail, hint].filter(Boolean).join(" ") },
+    });
+    if (s.error) return [mk("firedrill/run-error", "error", `Run error: ${s.error}`)];
+    return s.results.filter((a) => !a.ok).map((a) => mk(`firedrill/${a.assertion.type}`, LEVEL[severityOf(a)], a.detail, hintFor(a)));
+  }));
+  const rules = [...new Set(results.map((r) => r.ruleId))].map((id) => ({ id, name: id.slice("firedrill/".length) }));
+  return { version: "2.1.0", $schema: "https://json.schemastore.org/sarif-2.1.0.json", runs: [{ tool: { driver: { name: "Firedrill", informationUri: "https://github.com/SarthakRoy-1/FireDrill", rules } }, results }] };
+}

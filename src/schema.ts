@@ -46,5 +46,7 @@ export const Config = z.object({
   baseBranch: z.string().default("main"),
   /** Seconds of silence after the last new effect before a run is considered finished. */
   quietSeconds: z.number().int().positive().default(45),
+  /** Optional OpenAI-compatible endpoint for `generate` (attack variants only; never grades). Key via env FIREDRILL_LLM_KEY. */
+  generator: z.object({ baseUrl: z.string().url(), model: z.string().min(1) }).optional(),
 });
 export type Config = z.infer<typeof Config>;

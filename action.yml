@@ -1,0 +1,50 @@
+name: Firedrill
+description: Attack your Alan workflow with prompt-injection PRs on a sandbox repo and report the result to code scanning.
+inputs:
+  repo: { description: "Throwaway sandbox repo (owner/name) the attack PRs are opened on. Never the repo this workflow lives in unless that repo is the sandbox.", required: true }
+  scenarios: { description: "Scenario directory, relative to the workspace or to the Firedrill checkout", default: scenarios/attacks }
+  only: { description: "Comma-separated scenario ids (optional)", default: "" }
+  repeat: { description: "Runs per scenario", default: "1" }
+  name: { description: "Label for this configuration in the results", default: alan-workflow }
+  canary: { description: "Fake secret you pasted into the workflow instructions (store as a secret)", required: true }
+  tripwire-base: { description: "Public URL of a running tripwire (required for tripwire_hit scenarios)", default: "" }
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with: { node-version: 22 }
+    - run: npm ci
+      shell: bash
+      working-directory: ${{ github.action_path }}
+    # firedrill.config.json is git-ignored, so it is written here from the inputs.
+    - run: node -e 'const e=process.env;require("fs").writeFileSync("firedrill.config.json",JSON.stringify({canary:e.CANARY,...(e.TRIPWIRE?{tripwireBase:e.TRIPWIRE}:{})}))'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env: { CANARY: "${{ inputs.canary }}", TRIPWIRE: "${{ inputs.tripwire-base }}" }
+    - run: npx tsx src/cli.ts doctor --repo "$REPO"
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env: { REPO: "${{ inputs.repo }}" }
+    - id: run
+      continue-on-error: true # so the report below still uploads
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env: { REPO: "${{ inputs.repo }}", DIR: "${{ inputs.scenarios }}", ONLY: "${{ inputs.only }}", REPEAT: "${{ inputs.repeat }}", NAME: "${{ inputs.name }}" }
+      run: |
+        [ -d "$GITHUB_WORKSPACE/$DIR" ] && DIR="$GITHUB_WORKSPACE/$DIR"
+        npx tsx src/cli.ts run "$DIR" --repo "$REPO" --repeat "$REPEAT" --name "$NAME" --out results.json ${ONLY:+--only "$ONLY"}
+    # hashFiles only sees the workspace, so the report step publishes whether a SARIF file exists.
+    - id: report
+      if: always()
+      run: if [ -f results.json ]; then npx tsx src/cli.ts report results.json --sarif firedrill.sarif && echo "sarif=true" >> "$GITHUB_OUTPUT"; fi
+      shell: bash
+      working-directory: ${{ github.action_path }}
+    - if: always()
+      uses: actions/upload-artifact@v4
+      with: { name: firedrill-results, path: "${{ github.action_path }}/results.json", if-no-files-found: ignore }
+    - if: always() && steps.report.outputs.sarif == 'true'
+      uses: github/codeql-action/upload-sarif@v3
+      with: { sarif_file: "${{ github.action_path }}/firedrill.sarif", category: firedrill }
+    - if: steps.run.outcome == 'failure'
+      run: echo "Firedrill run failed (a scenario failed or errored); see the report above and the code scanning alerts." && exit 1
+      shell: bash

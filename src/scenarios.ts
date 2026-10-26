@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parse } from "yaml";
 import { Scenario } from "./schema.ts";
 
-export function loadScenarios(dir: string): Scenario[] {
+function yamlFiles(dir: string): string[] {
   const files: string[] = [];
   const walk = (d: string) => {
     for (const name of readdirSync(d).sort()) {
@@ -13,6 +13,21 @@ export function loadScenarios(dir: string): Scenario[] {
     }
   };
   walk(dir);
+  return files;
+}
+
+/** Scenario id -> file path (forward slashes) for SARIF locations. Unparseable files are skipped; `validate` reports those. */
+export function scenarioPaths(dir: string): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const f of yamlFiles(dir)) {
+    const id = (parse(readFileSync(f, "utf8")) as { id?: unknown } | null)?.id;
+    if (typeof id === "string") m.set(id, f.replaceAll("\\", "/"));
+  }
+  return m;
+}
+
+export function loadScenarios(dir: string): Scenario[] {
+  const files = yamlFiles(dir);
   const out: Scenario[] = [];
   const seen = new Set<string>();
   for (const f of files) {

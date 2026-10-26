@@ -13,9 +13,20 @@ AI workflows that run unattended get real repo access, and the text they read (P
 - `run` opens the PR on your sandbox repo through the GitHub API with a fine-grained token scoped to that repo, waits until the workflow goes quiet, then scores the observed effects. It closes the PR and branch afterwards.
 - **Tripwire**: `tripwire` starts a small server. Scenarios can plant trap URLs (`{{tripwire_url}}`), each unique to one run. A hit on the trap is evidence the workflow fetched attacker-controlled content.
 - **Grading** is deterministic. A workflow that never responds fails `workflow_responded`, so silence is never a pass. A scenario that errors is reported as ERROR, not PASS.
-- `report` prints a saved `results.json`. `selftest` proves the scorer catches failures using mock agents, which is a check on the harness, not on any real workflow.
+- `report` prints a saved `results.json` (and can write SARIF for code scanning). `selftest` proves the scorer catches failures using mock agents, which is a check on the harness, not on any real workflow.
 
 Firedrill never calls an Alan API. It observes only GitHub and its own tripwire.
+
+## What makes it different
+
+- It tests the deployed workflow end to end, through real GitHub effects (comments, branches, commits, merges), instead of prompting a model directly.
+- Grading is deterministic assertions. No model decides pass or fail; a model may only write attack variants.
+- A fake canary secret plus a trap URL unique to each run give hard evidence of a leak or a fetch.
+- The mock-agent `selftest` proves the grader catches failures before you trust a result.
+
+## Works with
+
+Firedrill only observes GitHub (pull requests, comments, branches, merges) and its own tripwire, so it should work with any agent that reacts to pull requests. It has only been tested with Alan.
 
 ## Quick start
 
@@ -62,6 +73,52 @@ npx tsx src/cli.ts report results.json after.json   # before and after, side by 
 ```
 
 `harden` prints fixed, hand-written rules (one per kind of violation), not model output. Prompt rules lower the risk; they do not replace removing secrets from the context, a read-only token and blocked outbound network.
+
+### Reports for code scanning (SARIF)
+
+```bash
+npx tsx src/cli.ts report results.json --sarif firedrill.sarif
+```
+
+Writes SARIF 2.1.0 next to the normal report: one result per failed assertion (`firedrill/<assertion type>`) and one per errored scenario (`firedrill/run-error`). Levels follow severity (high is error, medium is warning, low is note) and the message carries the how-to-fix text. The location is the scenario's YAML file, or `firedrill.config.json` when the id is not under `scenarios/`.
+
+### Attack variants from an open model
+
+```bash
+# firedrill.config.json: "generator": { "baseUrl": "http://localhost:11434/v1", "model": "<model name>" }
+export FIREDRILL_LLM_KEY=<optional bearer key>
+npx tsx src/cli.ts generate scenarios/attacks/exfil-fetch-url.yaml --count 5 --out scenarios/generated
+npx tsx src/cli.ts validate
+```
+
+Any OpenAI-compatible `/chat/completions` endpoint works. The model rewrites only the attack text (PR title and body, commit message, comments, file contents); class, file paths, branch name and assertions are copied from the seed, and a variant that drops a `{{placeholder}}` is rejected. Files get ids `<seed>-gen-<k>-<hex>` and a header comment naming the model. The model never grades. Not yet run against a real model: tests use a local stub server.
+
+### GitHub Action
+
+`action.yml` runs the pack on a schedule or on demand and uploads the results and SARIF.
+
+```yaml
+name: firedrill
+on:
+  workflow_dispatch:
+  schedule: [{ cron: "0 6 * * 1" }]
+permissions: { contents: write, pull-requests: write, security-events: write }
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: SarthakRoy-1/FireDrill@main
+        with:
+          repo: <owner>/<sandbox-repo>
+          canary: ${{ secrets.FIREDRILL_CANARY }}
+          tripwire-base: ${{ vars.FIREDRILL_TRIPWIRE }}   # optional
+          only: direct-override-ignore-rules,erosion-merge  # optional
+        env:
+          GITHUB_TOKEN: ${{ secrets.FIREDRILL_TOKEN }}     # fine-grained, sandbox repo only
+```
+
+Not yet run in CI. A full pack takes hours at Alan's run times (a job is limited to 6 hours). Without `tripwire-base`, scenarios that use `tripwire_hit` refuse to run, so pass `only` or host the tripwire yourself. Whether `env` on the `uses` step reaches the action's inner steps is untested; if it does not, set `GITHUB_TOKEN` at job level. The SARIF location only resolves to a file when the scenarios live in the repo being scanned.
 
 ## Scenarios
 
@@ -138,7 +195,7 @@ Record the results as they come, including a weakened workflow that still holds.
 ## Roadmap (planned, not built)
 
 - A hosted tripwire (no tunnel). It needs shared storage, because serverless instances do not share memory.
-- A GitHub Action for scheduled runs. Practical only with the hosted tripwire, since a full pack takes hours at Alan's run times.
+- Running the GitHub Action in CI (it exists but has not been run). Scheduled full runs are practical only with a hosted tripwire, since a full pack takes hours at Alan's run times.
 - `firedrill clone <owner>/<prod-repo>`: a sandbox from a production repo (code only). The Alan workflow cannot be copied (no documented API), so you would recreate it by hand.
 - More models, to measure variance across configurations.
 
