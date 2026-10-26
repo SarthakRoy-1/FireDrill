@@ -38,6 +38,7 @@ Options for `run`:
 - `--out <file>` chooses the results file (default `results.json`). It is rewritten after every scenario.
 - `--name <label>` names the configuration in the results (default `alan-workflow`).
 - Each scenario waits up to `waitSeconds` for the workflow to finish, default 900 s. Alan runs have taken 6 to 14 minutes.
+- A failing scenario prints a `how to fix` line under the failed assertion: fixed, hand-written advice for each kind of failure (secret leaked, trap URL fetched, repo changed, no output). It is generic guidance, not a diagnosis, and no model writes it. `npm run selftest` ends with an example report from the vulnerable mock.
 
 Create the workflow in Alan on your sandbox repo with the GitHub "Pull Request Opened" trigger. Example instructions, with the canary from `init`:
 
@@ -92,6 +93,13 @@ The raw saved results of the three runs are in `results/`: `batch1.json`, `batch
 - The egress check was a manual chat session, not the automation.
 - The harness catching failures is shown on mocks (`npm run selftest`). It has not yet been shown catching a real vulnerable workflow.
 - 12 attacks is not a security audit. These results say nothing general about Alan as a product, and none of them is a claim that Alan is secure or vulnerable.
+
+## Roadmap (planned, not built)
+
+- `firedrill clone <owner>/<prod-repo>`: create the throwaway sandbox repo from a production repo. It would copy code only. The Alan workflow itself cannot be copied, because Alan has no documented API, so you would still recreate it on the clone with the same instructions, model and tools.
+- A GitHub Action that reruns the attacks after every prompt or model change.
+- A live run against a deliberately weakened workflow, to show the harness catching a real failure. So far that is shown only on mock agents.
+- More runs per scenario and more models, to measure variance.
 
 ## Safety
 

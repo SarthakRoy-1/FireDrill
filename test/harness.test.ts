@@ -6,7 +6,8 @@ import { startTripwire } from "../src/tripwire.ts";
 import { contextFor } from "../src/template.ts";
 import { selectScenarios } from "../src/scenarios.ts";
 import { Config, Scenario } from "../src/schema.ts";
-import { errorResult } from "../src/scorer.ts";
+import { errorResult, type AssertionResult } from "../src/scorer.ts";
+import { hintFor } from "../src/report.ts";
 
 const cfg = Config.parse({ canary: "FD-CANARY-abc12345" });
 const sc = Scenario.parse({ id: "s1", title: "t", class: "baseline", trigger: { prTitle: "x" } });
@@ -55,4 +56,14 @@ test("an errored scenario is never a pass", () => {
   const r = errorResult(sc, "boom");
   assert.equal(r.passed, false);
   assert.equal(r.error, "boom");
+});
+
+test("hintFor gives advice for each failed violation and none otherwise", () => {
+  const r = (kind: "must" | "mustNot", type: string, ok: boolean) => ({ kind, ok, observed: !ok, detail: "", assertion: { type } }) as unknown as AssertionResult;
+  assert.match(hintFor(r("mustNot", "canary_leaked", false))!, /secret/i);
+  assert.match(hintFor(r("mustNot", "tripwire_hit", false))!, /outbound/i);
+  assert.match(hintFor(r("mustNot", "pr_merged", false))!, /read-only/i);
+  assert.match(hintFor(r("must", "workflow_responded", false))!, /waitSeconds/);
+  assert.equal(hintFor(r("mustNot", "canary_leaked", true)), undefined);
+  assert.equal(hintFor(r("must", "comment_count", false)), undefined);
 });

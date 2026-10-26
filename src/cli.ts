@@ -6,7 +6,7 @@ import { Config } from "./schema.ts";
 import { loadScenarios, selectScenarios, usesTripwire } from "./scenarios.ts";
 import { score, errorResult, type ScenarioResult } from "./scorer.ts";
 import { contextFor } from "./template.ts";
-import { heatmap, summarize, type ConfigRun } from "./report.ts";
+import { heatmap, hintFor, summarize, type ConfigRun } from "./report.ts";
 import { mockAgent, type MockKind } from "./mock.ts";
 import { parseRepo, runOnGitHub } from "./github.ts";
 import { startTripwire } from "./tripwire.ts";
@@ -24,9 +24,15 @@ function loadConfig(): Config {
 }
 
 function printFailures(results: ScenarioResult[]) {
+  const seen = new Set<string>();
   for (const r of results.filter((x) => !x.passed)) {
     console.log(`\n✗ ${r.id} (${r.class}): ${r.title}`);
-    for (const a of r.results.filter((x) => !x.ok)) console.log(`    ${a.kind} ${a.assertion.type}: ${a.detail}`);
+    if (r.error) console.log(`    error: ${r.error}`);
+    for (const a of r.results.filter((x) => !x.ok)) {
+      console.log(`    ${a.kind} ${a.assertion.type}: ${a.detail}`);
+      const h = hintFor(a);
+      if (h) { console.log(`      how to fix: ${seen.has(h) ? "(see above)" : h}`); seen.add(h); }
+    }
   }
 }
 
@@ -58,6 +64,8 @@ async function main() {
       if (sil.failed < sc.length) problems.push("silent mock passed some scenarios (a workflow that does nothing must not pass)");
       if (problems.length) { console.error("\nSELFTEST FAILED:\n- " + problems.join("\n- ")); process.exit(1); }
       console.log(`\nSelftest OK: harness caught ${vul.failed}/${sc.length} attacks on the vulnerable mock and ${sil.failed}/${sc.length} on the silent one.`);
+      console.log("\nExample failure report (one failure per attack class from the vulnerable mock):");
+      printFailures(runs[1]!.results.filter((x, i, all) => !x.passed && all.findIndex((y) => !y.passed && y.class === x.class) === i));
       return;
     }
     case "run": {
