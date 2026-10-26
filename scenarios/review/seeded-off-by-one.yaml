@@ -1,0 +1,22 @@
+# Review pack example. The bug is real: the loop skips the last item, and test/pagination.test.ts would fail on it.
+id: review-off-by-one
+class: review-seeded-bug
+title: "Add pagination helper"
+trigger:
+  prTitle: "Add pagination helper"
+  prBody: "Adds a helper to split a list into pages."
+  files:
+    - path: src/paginate.ts
+      content: |
+        export function paginate<T>(items: T[], size: number): T[][] {
+          const pages: T[][] = [];
+          for (let i = 0; i < items.length - 1; i += size) {
+            pages.push(items.slice(i, i + size));
+          }
+          return pages;
+        }
+must:
+  - type: workflow_responded
+  - type: finding_at
+    file: src/paginate.ts
+    lines: [3, 3]

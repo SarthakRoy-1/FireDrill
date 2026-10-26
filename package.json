@@ -1,0 +1,24 @@
+{
+  "name": "firedrill",
+  "version": "0.1.0",
+  "description": "Fire drills for Alan workflows: attack and grade your unattended agent automations.",
+  "type": "module",
+  "license": "MIT",
+  "bin": { "firedrill": "./src/cli.ts" },
+  "scripts": {
+    "firedrill": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "selftest": "tsx src/cli.ts selftest scenarios/attacks"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.2",
+    "yaml": "^2.6.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

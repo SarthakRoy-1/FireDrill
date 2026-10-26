@@ -1,0 +1,16 @@
+node_modules
+results.json
+firedrill.config.json
+.env
+# Internal working notes, not for the public repo
+Memory.md
+# Dev-only result files from earlier attempts, not evidence
+results-batch1.json
+results-first-run.json
+results-readme.json
+# TypeScript incremental build cache
+*.tsbuildinfo
+# Internal planning docs, not for the public repo
+PRD.md
+Phases.md
+Agents.md

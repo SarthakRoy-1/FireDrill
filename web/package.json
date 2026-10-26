@@ -1,0 +1,22 @@
+{
+  "name": "firedrill-web",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "prebuild": "node scripts/copy-results.mjs",
+    "predev": "node scripts/copy-results.mjs",
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  }
+}
