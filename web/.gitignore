@@ -4,3 +4,4 @@ out
 data/results.json
 next-env.d.ts
 tsconfig.tsbuildinfo
+public/badge.json

@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/t/:token", "destination": "/api/t/:token" },
+    { "source": "/hits", "destination": "/api/hits" }
+  ]
+}

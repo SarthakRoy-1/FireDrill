@@ -4,5 +4,5 @@
     "strict": true, "esModuleInterop": true, "skipLibCheck": true,
     "allowImportingTsExtensions": true, "noEmit": true, "types": ["node"]
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "tripwire-vercel"]
 }

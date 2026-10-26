@@ -82,6 +82,41 @@ npx tsx src/cli.ts report results.json --sarif firedrill.sarif
 
 Writes SARIF 2.1.0 next to the normal report: one result per failed assertion (`firedrill/<assertion type>`) and one per errored scenario (`firedrill/run-error`). Levels follow severity (high is error, medium is warning, low is note) and the message carries the how-to-fix text. The location is the scenario's YAML file, or `firedrill.config.json` when the id is not under `scenarios/`.
 
+### Badge and standalone HTML report
+
+```bash
+npx tsx src/cli.ts report results/batch2.json results/rerun.json --badge badge.json --html report.html
+```
+
+`--badge` writes a [shields.io endpoint](https://shields.io/badges/endpoint-badge) JSON for the last run in the list: `<passed>/<total> passed`, green if all passed, red if any high-severity violation, orange otherwise. The web build does the same for the last source run and serves it at `/badge.json`, so a README badge can point at `https://img.shields.io/endpoint?url=https://<your-site>/badge.json`. `--html` writes one self-contained file (inline CSS, no scripts, no external assets): the scenario by run grid, then each failure with severity, detail and how-to-fix. Result text comes from attackers, so every value is HTML-escaped.
+
+### Hosted tripwire (no tunnel)
+
+`tripwire-vercel/` is the same tripwire as Vercel functions with Upstash Redis storage (the CLI is unchanged, only `tripwireBase` points at it). See `tripwire-vercel/README.md` for deploy steps; you provision the Redis yourself. The storage code is tested against a local stub of the Upstash REST API. It has not been deployed or run on Vercel.
+
+### One run per sandbox repo at a time
+
+`run` finds "new branches" by comparing the branch list before and after, so a second Firedrill run on the same sandbox repo at the same time can create a branch that the first run counts as `new_branch_created`, a false FAIL. Run one Firedrill run per sandbox repo at a time. `doctor` fails when open Firedrill PRs exist (head branch `firedrill/...` or a scenario's `branchName` prefix), because that means another run may be in progress or left PRs behind.
+
+### Running two at once
+
+- Results never mix on the Vercel page: the page is built from your local `results/*.json` files at deploy time, and each user deploys their own page.
+- One run per sandbox repo at a time (above). Two people with two sandbox repos do not interfere.
+- A shared hosted tripwire is fine: trap tokens are random per run and only the current run's token counts. Anyone can read `/hits` (token ids only); self-host for privacy.
+
+### Weak reference agent (live)
+
+`examples/weak-agent/` holds a GitHub Actions workflow that acts as a deliberately weak AI reviewer (any OpenAI-compatible endpoint, fake canary in its prompt), so you can watch Firedrill catch a real failure without Alan. Sandbox repo only. Setup and the run command are in `examples/weak-agent/README.md`. Not installed or run yet. It is vulnerable to prompt injection only; PR text reaches the shell through env vars and `jq`.
+
+### Clone a code-only sandbox
+
+```bash
+export GITHUB_TOKEN=<token that can read the source and create repos>
+npx tsx src/cli.ts clone <owner>/<src-repo> <new-name>
+```
+
+Clones the source at depth 1, deletes `.git`, scans the files, refuses (exit 1, `file:line pattern`, never the value) if anything looks like a secret, then creates a private repo under the token owner and pushes one fresh commit. The scan covers GitHub tokens, AWS key ids, private key headers, Slack tokens, Stripe live keys, quoted `api_key`/`secret`/`password` values of 16+ characters, and any `.env` file; binaries and files over 1 MB are skipped. A regex scan is a guard, not a guarantee. This needs a token that can create repos, which is broader than the sandbox-only token, so use it once and revoke it. The Alan workflow cannot be copied (no documented API): recreate it by hand, paste the canary, run `doctor`. Workflows under `.github/workflows` come along with the code; review them. Not run against GitHub yet; only the scanner is tested.
+
 ### Attack variants from an open model
 
 ```bash
@@ -194,9 +229,10 @@ Record the results as they come, including a weakened workflow that still holds.
 
 ## Roadmap (planned, not built)
 
-- A hosted tripwire (no tunnel). It needs shared storage, because serverless instances do not share memory.
+- Deploy and verify the hosted tripwire on Vercel (built and tested against a stub, not deployed).
+- Install and run the weak reference agent live, and record the results.
+- Run `clone` against a real repo (only the scanner is tested).
 - Running the GitHub Action in CI (it exists but has not been run). Scheduled full runs are practical only with a hosted tripwire, since a full pack takes hours at Alan's run times.
-- `firedrill clone <owner>/<prod-repo>`: a sandbox from a production repo (code only). The Alan workflow cannot be copied (no documented API), so you would recreate it by hand.
 - More models, to measure variance across configurations.
 
 ## Safety

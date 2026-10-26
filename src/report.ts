@@ -50,6 +50,8 @@ export function summarize(run: ConfigRun) {
   return { name: run.name, total, passed, failed: total - passed };
 }
 
+const status = (x: ScenarioResult | undefined) => (x ? (x.error ? "ERROR" : x.passed ? "PASS" : "FAIL") : "-");
+
 /** Plain-text scenario x configuration grid.  */
 export function heatmap(runs: ConfigRun[]): string {
   const ids = [...new Set(runs.flatMap((r) => r.results.map((x) => x.id)))];
@@ -58,7 +60,7 @@ export function heatmap(runs: ConfigRun[]): string {
   const head = "scenario".padEnd(w) + "  " + runs.map((r) => r.name.padEnd(cw)).join(" ");
   const rows = ids.map((id) => id.padEnd(w) + "  " + runs.map((r) => {
     const x = r.results.find((y) => y.id === id);
-    return (x ? (x.error ? "ERROR" : x.passed ? "PASS" : "FAIL") : "-").padEnd(cw);
+    return status(x).padEnd(cw);
   }).join(" "));
   const foot = "total".padEnd(w) + "  " + runs.map((r) => { const s = summarize(r); return `${s.passed}/${s.total}`.padEnd(cw); }).join(" ");
   return [head, ...rows, foot].join("\n");
@@ -79,4 +81,37 @@ export function toSarif(runs: ConfigRun[], locate: (id: string) => string) {
   }));
   const rules = [...new Set(results.map((r) => r.ruleId))].map((id) => ({ id, name: id.slice("firedrill/".length) }));
   return { version: "2.1.0", $schema: "https://json.schemastore.org/sarif-2.1.0.json", runs: [{ tool: { driver: { name: "Firedrill", informationUri: "https://github.com/SarthakRoy-1/FireDrill", rules } }, results }] };
+}
+
+/** shields.io endpoint JSON for one run: green all passed, red if any high-severity violation, orange otherwise. */
+export function toBadge(run: ConfigRun) {
+  const { passed, total } = summarize(run);
+  const high = run.results.some((s) => s.results.some((a) => !a.ok && severityOf(a) === "high"));
+  return { schemaVersion: 1, label: "firedrill", message: `${passed}/${total} passed`, color: passed === total ? "brightgreen" : high ? "red" : "orange" };
+}
+
+/** Results hold attacker text, so every value is escaped before it reaches the page. */
+export const escapeHtml = (v: unknown): string =>
+  String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+const CSS = "body{font:14px system-ui,sans-serif;margin:2rem;color:#111}table{border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}.PASS{background:#d4f4dd}.FAIL{background:#f9d0d0}.ERROR{background:#fde5b8}.s-high{color:#b00020;font-weight:700}li{margin:.4rem 0}pre{white-space:pre-wrap}";
+
+/** One self-contained HTML page (inline CSS, no scripts, no external assets): heatmap, then failures with severity, detail and hint. */
+export function toHtml(runs: ConfigRun[]): string {
+  const ids = [...new Set(runs.flatMap((r) => r.results.map((x) => x.id)))];
+  const head = `<tr><th>scenario</th>${runs.map((r) => `<th>${escapeHtml(r.name)}</th>`).join("")}</tr>`;
+  const rows = ids.map((id) => `<tr><td>${escapeHtml(id)}</td>${runs.map((r) => { const st = status(r.results.find((y) => y.id === id)); return `<td class="${st}">${st}</td>`; }).join("")}</tr>`);
+  const foot = `<tr><th>total</th>${runs.map((r) => { const s = summarize(r); return `<th>${s.passed}/${s.total}</th>`; }).join("")}</tr>`;
+  const fails = runs.map((r) => {
+    const items = r.results.filter((x) => !x.passed).map((x) => {
+      const detail = x.error ? [`<li>error: <pre>${escapeHtml(x.error)}</pre></li>`] : [];
+      for (const a of x.results.filter((y) => !y.ok)) {
+        const h = hintFor(a);
+        detail.push(`<li><span class="s-${severityOf(a)}">[${severityOf(a)}]</span> ${escapeHtml(a.kind)} ${escapeHtml(a.assertion.type)}: <pre>${escapeHtml(a.detail)}</pre>${h ? `<em>How to fix: ${escapeHtml(h)}</em>` : ""}</li>`);
+      }
+      return `<h3>${escapeHtml(x.id)} (${escapeHtml(x.class)}): ${escapeHtml(x.title)}</h3><ul>${detail.join("")}</ul>`;
+    });
+    return items.length ? `<h2>Failures: ${escapeHtml(r.name)}</h2>${items.join("")}` : "";
+  });
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firedrill report</title><style>${CSS}</style></head><body><h1>Firedrill report</h1><table>${head}${rows.join("")}${foot}</table>${fails.join("")}</body></html>\n`;
 }

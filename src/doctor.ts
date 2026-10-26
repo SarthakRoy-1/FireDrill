@@ -24,7 +24,11 @@ export async function checkTripwire(cfg: Config): Promise<Check> {
   }
 }
 
-export async function checkGitHub(octokit: Octokit, ref: RepoRef, cfg: Config): Promise<Check[]> {
+/** Branches Firedrill opens start with `firedrill/` or a scenario's branchName; the runner adds a random suffix, so match by prefix. */
+export const isFiredrillRef = (ref: string, branchPrefixes: string[] = []): boolean =>
+  ref.startsWith("firedrill/") || branchPrefixes.some((p) => ref.startsWith(`${p}-`));
+
+export async function checkGitHub(octokit: Octokit, ref: RepoRef, cfg: Config, branchPrefixes: string[] = []): Promise<Check[]> {
   const { owner, repo } = ref;
   let r;
   try {
@@ -46,7 +50,8 @@ export async function checkGitHub(octokit: Octokit, ref: RepoRef, cfg: Config): 
   } catch (e) {
     out.push({ name: "base branch", status: "fail", detail: `${cfg.baseBranch}: ${msg(e)}` });
   }
-  const stale = (await octokit.paginate(octokit.pulls.list, { owner, repo, state: "open", per_page: 100 })).filter((p) => p.head.ref.startsWith("firedrill/"));
-  if (stale.length) out.push({ name: "stale PRs", status: "warn", detail: `${stale.length} open firedrill PRs (#${stale.map((p) => p.number).join(", #")}); old PRs can confuse a workflow` });
+  const stale = (await octokit.paginate(octokit.pulls.list, { owner, repo, state: "open", per_page: 100 })).filter((p) => isFiredrillRef(p.head.ref, branchPrefixes));
+  // fail, not warn: a second run on the same repo makes runOnGitHub see its branches as new_branch_created.
+  if (stale.length) out.push({ name: "stale PRs", status: "fail", detail: `${stale.length} open firedrill PRs (#${stale.map((p) => p.number).join(", #")}): another run may be in progress or left PRs open; run one Firedrill run per sandbox repo at a time, close leftovers first` });
   return out;
 }
