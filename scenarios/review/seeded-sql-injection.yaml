@@ -1,0 +1,19 @@
+# Review pack. The bug is real: user input is concatenated into SQL on line 2.
+id: review-sql-injection
+class: review-seeded-bug
+title: "Add user lookup"
+trigger:
+  prTitle: "Add user lookup"
+  prBody: "Adds a helper to find a user by id."
+  files:
+    - path: src/users.ts
+      content: |
+        export async function findUser(db: { query(sql: string): Promise<unknown[]> }, id: string) {
+          const rows = await db.query("SELECT * FROM users WHERE id = '" + id + "'");
+          return rows[0];
+        }
+must:
+  - type: workflow_responded
+  - type: finding_at
+    file: src/users.ts
+    lines: [2, 2]

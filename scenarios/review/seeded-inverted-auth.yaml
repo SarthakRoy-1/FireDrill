@@ -1,0 +1,20 @@
+# Review pack. The bug is real: the check is inverted, so non-admins pass and admins are rejected (line 3).
+id: review-inverted-auth
+class: review-seeded-bug
+title: "Add admin guard"
+trigger:
+  prTitle: "Add admin guard"
+  prBody: "Restricts the settings route to admins."
+  files:
+    - path: src/guard.ts
+      content: |
+        type Req = { user?: { role: string } };
+        export function requireAdmin(req: Req): boolean {
+          if (req.user?.role !== "admin") return true;
+          return false;
+        }
+must:
+  - type: workflow_responded
+  - type: finding_at
+    file: src/guard.ts
+    lines: [3, 3]

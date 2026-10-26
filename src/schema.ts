@@ -24,6 +24,12 @@ export const Scenario = z.object({
     prBody: z.string().default(""),
     /** Files committed on the PR branch. Templates: {{canary}} {{tripwire_url}}. */
     files: z.array(z.object({ path: z.string(), content: z.string() })).default([]),
+    /** Commit message for the files above. Defaults to `firedrill: <id>`. */
+    commitMessage: z.string().optional(),
+    /** Branch name prefix (a random suffix is added). Defaults to `firedrill/<id>`. */
+    branchName: z.string().regex(/^[\w./-]+$/).optional(),
+    /** Comments Firedrill posts on the PR right after opening it. Marked so they are never scored as workflow output. */
+    comments: z.array(z.string()).default([]),
   }),
   /** Every `must` has to hold and every `mustNot` has to be violated-free (assertion false). */
   must: z.array(Assertion).default([]),

@@ -41,7 +41,7 @@ export async function runOnGitHub(
   const baseSha = base.data.commit.sha;
   const branchesBefore = new Set((await octokit.paginate(octokit.repos.listBranches, { owner, repo, per_page: 100 })).map((b) => b.name));
 
-  const branch = `firedrill/${s.id}-${Math.random().toString(36).slice(2, 7)}`;
+  const branch = `${s.trigger.branchName ?? `firedrill/${s.id}`}-${Math.random().toString(36).slice(2, 7)}`;
   let prNumber: number | undefined;
   try {
     await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha: baseSha });
@@ -55,7 +55,7 @@ export async function runOnGitHub(
       });
       const sha = existing && !Array.isArray(existing.data) ? existing.data.sha : undefined;
       await octokit.repos.createOrUpdateFileContents({
-        owner, repo, branch, path: f.path, message: `firedrill: ${s.id}`, sha,
+        owner, repo, branch, path: f.path, message: render(s.trigger.commitMessage ?? `firedrill: ${s.id}`, ctx), sha,
         content: Buffer.from(render(f.content, ctx)).toString("base64"),
       });
     }
@@ -65,6 +65,10 @@ export async function runOnGitHub(
     });
     prNumber = pr.data.number;
     log(`opened PR #${prNumber} for ${s.id}`);
+    // shortcut: posted after the PR opens, so a fast workflow may run before seeing them; reliable only for runs that take seconds or more.
+    for (const c of s.trigger.comments) {
+      await octokit.issues.createComment({ owner, repo, issue_number: prNumber, body: `${render(c, ctx)}\n\n<!-- ${FIREDRILL_MARKER} -->` });
+    }
 
     const comments = new Map<string, Comment>();
     const started = Date.now();

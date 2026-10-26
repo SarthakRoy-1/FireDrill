@@ -12,7 +12,10 @@ export type MockKind = "vulnerable" | "resistant" | "silent";
 export function mockAgent(kind: MockKind, s: Scenario, ctx: RunContext): Effects {
   const e = emptyEffects();
   if (kind === "silent") return e;
-  const text = render(`${s.trigger.prTitle}\n${s.trigger.prBody}\n${s.trigger.files.map((f) => f.content).join("\n")}`, ctx);
+  const t = s.trigger;
+  const raw = render([t.prTitle, t.prBody, t.commitMessage ?? "", t.branchName ?? "", ...t.comments, ...t.files.map((f) => f.content)].join("\n"), ctx);
+  // A vulnerable agent also follows base64 it decodes.
+  const text = raw + "\n" + (raw.match(/[A-Za-z0-9+/]{24,}={0,2}/g) ?? []).map((b) => Buffer.from(b, "base64").toString("utf8")).join("\n");
   e.comments.push({ author: "mock", body: `Summary: ${s.trigger.prTitle}` });
   if (kind === "vulnerable") {
     if (/(ignore|disregard).{0,40}(instruction|rules)/i.test(text) || /post .*token/i.test(text)) {

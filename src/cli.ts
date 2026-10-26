@@ -1,12 +1,14 @@
 #!/usr/bin/env -S npx tsx
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 import { randomBytes } from "node:crypto";
 import { Octokit } from "@octokit/rest";
 import { Config } from "./schema.ts";
 import { loadScenarios, selectScenarios, usesTripwire } from "./scenarios.ts";
 import { score, errorResult, type ScenarioResult } from "./scorer.ts";
 import { contextFor } from "./template.ts";
-import { heatmap, hintFor, summarize, type ConfigRun } from "./report.ts";
+import { hardenedPrompt, heatmap, hintFor, severityOf, summarize, type ConfigRun } from "./report.ts";
+import { checkGitHub, checkTripwire, type Check } from "./doctor.ts";
 import { mockAgent, type MockKind } from "./mock.ts";
 import { parseRepo, runOnGitHub } from "./github.ts";
 import { startTripwire } from "./tripwire.ts";
@@ -23,13 +25,22 @@ function loadConfig(): Config {
   return Config.parse(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
 }
 
+/** Runs from one or more saved results files. With several files, run names get the file name so columns stay distinct. */
+function loadRuns(files: string[]): ConfigRun[] {
+  const list = files.length ? files : ["results.json"];
+  return list.flatMap((f) => (JSON.parse(readFileSync(f, "utf8")) as { runs: ConfigRun[] }).runs
+    .map((r) => (list.length > 1 ? { ...r, name: `${basename(f, ".json")}:${r.name}` } : r)));
+}
+
+const positional = (args: string[]) => args.filter((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
+
 function printFailures(results: ScenarioResult[]) {
   const seen = new Set<string>();
   for (const r of results.filter((x) => !x.passed)) {
     console.log(`\n✗ ${r.id} (${r.class}): ${r.title}`);
     if (r.error) console.log(`    error: ${r.error}`);
     for (const a of r.results.filter((x) => !x.ok)) {
-      console.log(`    ${a.kind} ${a.assertion.type}: ${a.detail}`);
+      console.log(`    [${severityOf(a)}] ${a.kind} ${a.assertion.type}: ${a.detail}`);
       const h = hintFor(a);
       if (h) { console.log(`      how to fix: ${seen.has(h) ? "(see above)" : h}`); seen.add(h); }
     }
@@ -74,15 +85,21 @@ async function main() {
       const token = process.env.GITHUB_TOKEN;
       if (!token) throw new Error("Set GITHUB_TOKEN (fine-grained, scoped to the sandbox repo only)");
       const cfg = loadConfig();
-      const only = flag(args, "only");
+      const failedFile = flag(args, "only-failed");
+      const failedIds = failedFile ? [...new Set(loadRuns([failedFile]).flatMap((r) => r.results.filter((x) => !x.passed).map((x) => x.id)))] : undefined;
+      if (failedIds && !failedIds.length) { console.log(`Nothing failed in ${failedFile}.`); return; }
+      const only = failedIds?.join(",") ?? flag(args, "only");
+      const repeat = Number(flag(args, "repeat") ?? 1);
+      if (!Number.isInteger(repeat) || repeat < 1) throw new Error("--repeat must be a positive integer");
       const name = flag(args, "name") ?? "alan-workflow";
       const octokit = new Octokit({ auth: token });
       const selected = selectScenarios(loadScenarios(dir), only);
       if (!cfg.tripwireBase && selected.some(usesTripwire)) throw new Error("scenarios use tripwire_hit but tripwireBase is not set in firedrill.config.json");
       const out = flag(args, "out") ?? "results.json";
-      const results: ScenarioResult[] = [];
-      for (const s of selected) {
-        console.log(`> ${s.id}`);
+      // One run per repeat, named name-1, name-2, ... so the heatmap shows variance side by side.
+      const runs: ConfigRun[] = Array.from({ length: repeat }, (_, i) => ({ name: repeat > 1 ? `${name}-${i + 1}` : name, results: [] }));
+      for (const { name: runName, results } of runs) for (const s of selected) {
+        console.log(`> ${s.id}${repeat > 1 ? ` (${runName})` : ""}`);
         try {
           const ctx = contextFor(cfg, s);
           const r = score(s, await runOnGitHub(octokit, repo, s, ctx, cfg, (m) => console.log(`  ${m}`)), ctx);
@@ -93,12 +110,11 @@ async function main() {
           console.log(`  ERROR: ${msg}`);
           results.push(errorResult(s, msg));
         }
-        writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), runs: [{ name, results }] }, null, 2));
+        writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), runs }, null, 2));
       }
-      const run: ConfigRun = { name, results };
-      console.log("\n" + heatmap([run]));
-      printFailures(results);
-      process.exitCode = results.every((r) => r.passed) ? 0 : 1;
+      console.log("\n" + heatmap(runs));
+      for (const r of runs) printFailures(r.results);
+      process.exitCode = runs.every((r) => r.results.every((x) => x.passed)) ? 0 : 1;
       return;
     }
     case "tripwire": {
@@ -108,13 +124,34 @@ async function main() {
       return;
     }
     case "report": {
-      const j = JSON.parse(readFileSync(args[0] ?? "results.json", "utf8")) as { runs: ConfigRun[] };
-      console.log(heatmap(j.runs));
-      for (const r of j.runs) printFailures(r.results);
+      const runs = loadRuns(positional(args));
+      console.log(heatmap(runs));
+      for (const r of runs) printFailures(r.results);
+      return;
+    }
+    case "harden": {
+      const p = hardenedPrompt(loadRuns(positional(args)).flatMap((r) => r.results));
+      if (!p) { console.log("No violations in these results, so no prompt rules to add. (workflow_responded failures are timeouts or run errors, not prompt problems.)"); return; }
+      console.log(`Add these lines to the workflow instructions, then rerun what failed:\n\n${p}\n\n  npx tsx src/cli.ts run <dir> --repo <o/n> --only-failed <results.json> --out after.json\n  npx tsx src/cli.ts report <results.json> after.json\n\nPrompt rules lower the risk but do not replace the how-to-fix steps (secrets out of context, read-only token, no outbound network).`);
+      return;
+    }
+    case "doctor": {
+      const checks: Check[] = [];
+      let cfg: Config | undefined;
+      try { cfg = loadConfig(); checks.push({ name: "config", status: "ok", detail: `${CONFIG_FILE} valid` }); } catch (e) { checks.push({ name: "config", status: "fail", detail: e instanceof Error ? e.message : String(e) }); }
+      const token = process.env.GITHUB_TOKEN;
+      checks.push(token ? { name: "GITHUB_TOKEN", status: "ok", detail: "set" } : { name: "GITHUB_TOKEN", status: "fail", detail: "not set (fine-grained, sandbox repo only)" });
+      const repoArg = flag(args, "repo");
+      if (!repoArg) checks.push({ name: "repo", status: "fail", detail: "pass --repo owner/name" });
+      if (cfg) checks.push(await checkTripwire(cfg));
+      if (cfg && token && repoArg) checks.push(...(await checkGitHub(new Octokit({ auth: token }), parseRepo(repoArg), cfg)));
+      const mark = { ok: "✓", warn: "!", fail: "✗" };
+      for (const c of checks) console.log(`${mark[c.status]} ${c.name.padEnd(13)} ${c.detail}`);
+      process.exitCode = checks.some((c) => c.status === "fail") ? 1 : 0;
       return;
     }
     default:
-      console.log("firedrill <init|validate|selftest|run|tripwire|report>\n  init                       create config and print the canary line for your workflow\n  validate [dir]             check scenario files\n  selftest [dir]             prove the scorer catches failures using mock agents\n  run [dir] --repo o/n       run scenarios against your Alan workflow via a sandbox repo\n  tripwire [--port 8787]     start the trap-URL server\n  report [results.json]      print a saved run");
+      console.log("firedrill <init|doctor|validate|selftest|run|tripwire|report|harden>\n  init                       create config and print the canary line for your workflow\n  doctor --repo o/n          check config, token, repo and tripwire before a run\n  validate [dir]           check scenario files\n  selftest [dir]             prove the scorer catches failures using mock agents\n  run [dir] --repo o/n       run scenarios against your Alan workflow via a sandbox repo\n  tripwire [--port 8787]     start the trap-URL server\n    --repeat N               run every scenario N times to show variance\n    --only-failed file.json  rerun only what failed in a saved run\n  report [file.json ...]     print saved runs side by side (before/after)\n  harden [file.json ...]     suggest prompt rules for the violations seen");
   }
 }
 
