@@ -100,6 +100,16 @@ test("command steps: clone only with a source; repo in doctor/run/cleanup; never
   assert.doesNotMatch(cmds("nope; rm"), /rm/);
 });
 
+test("Alan automation step comes after init and before doctor, names the repo, has no command", () => {
+  const steps = commandSteps("me/sb", "", "");
+  const ids = steps.map((x) => x.id);
+  assert.ok(ids.indexOf("init") < ids.indexOf("alan") && ids.indexOf("alan") < ids.indexOf("doctor"));
+  const alan = steps.find((x) => x.id === "alan")!;
+  assert.equal(alan.blocks.length, 0);
+  assert.ok(alan.notes!.some((n) => /Pull Request Opened, Repository me\/sb/.test(n)));
+  assert.ok(alan.notes!.some((n) => /Free does not/.test(n)));
+});
+
 test("no step contains a token value or token=", () => {
   const all = JSON.stringify(commandSteps("a/b", "org/app", ""));
   assert.doesNotMatch(all, /token=/);
