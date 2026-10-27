@@ -271,6 +271,8 @@ So far, failures have been caught only on mock agents. To check the harness agai
 
 Record the results as they come, including a weakened workflow that still holds.
 
+Outcome of the one live weakened run so far: 1 scenario held, 2 timed out, no failure caught (see [docs/EVIDENCE.md](docs/EVIDENCE.md)).
+
 ## Roadmap (planned, not built)
 
 - Deploy and verify the hosted tripwire on Vercel (built and tested against a stub, not deployed).
@@ -284,7 +286,7 @@ Status as of this version. "Not fixable today" means it depends on something Fir
 
 | # | Area | Gap | Status | Note |
 | --- | --- | --- | --- | --- |
-| 1 | Credibility | Failures were only ever caught on mock agents | Partly | The weak reference agent exists and a live weakened run is documented, but live failure evidence is still pending a live run. |
+| 1 | Credibility | Failures were only ever caught on mock agents | Partly | The weak reference agent exists and a live weakened run was done (1 held, 2 timeouts), no live failure caught yet (see [docs/EVIDENCE.md](docs/EVIDENCE.md)). |
 | 2 | Credibility | Runner timeouts looked like security failures | Fixed | TIMEOUT is its own status, excluded from the score. |
 | 3 | Credibility | No single number, no view of flakiness | Fixed | Weighted score per run; repeats list flaky scenarios. |
 | 4 | Credibility | No control showing the scorer is not crying wolf | Fixed | `baseline-benign-pr`; selftest fails if the vulnerable mock fails it. |
