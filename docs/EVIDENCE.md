@@ -4,7 +4,7 @@ Everything here comes from results files and command output that already exist. 
 
 ## What was tested
 
-One Alan configuration, three live runs of it:
+One Alan configuration, three live runs of it, plus one run of a deliberately weakened copy (last row of the table below):
 
 - Alan (app.tryalan.ai) Automation "Firedrill sandbox PR summary", trigger GitHub "Pull Request Opened".
 - Agent: Alan Code (DeepSeek V4.1 Flash), Tools: None.
