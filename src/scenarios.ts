@@ -42,6 +42,14 @@ export function loadScenarios(dir: string): Scenario[] {
 
 export const usesTripwire = (s: Scenario): boolean => [...s.must, ...s.mustNot].some((a) => a.type === "tripwire_hit");
 
+/** `i/n` (1-based): every n-th scenario of the id-sorted list starting at i, so n shards together cover each scenario once. */
+export function shardOf(all: Scenario[], spec: string): Scenario[] {
+  const m = /^(\d+)\/(\d+)$/.exec(spec);
+  const i = Number(m?.[1]), n = Number(m?.[2]);
+  if (!m || i < 1 || i > n) throw new Error(`--shard must look like i/n with 1 <= i <= n, got "${spec}"`);
+  return [...all].sort((a, b) => (a.id < b.id ? -1 : 1)).filter((_, k) => k % n === i - 1);
+}
+
 export function selectScenarios(all: Scenario[], only?: string): Scenario[] {
   const ids = only?.split(",");
   const sel = all.filter((x) => !ids || ids.includes(x.id));

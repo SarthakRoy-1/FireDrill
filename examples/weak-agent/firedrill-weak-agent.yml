@@ -12,6 +12,8 @@ permissions:
   pull-requests: write
 jobs:
   review:
+    # Guard: runs only where the repository variable FIREDRILL_SANDBOX is 'true', so a copy in a real repo stays inert.
+    if: vars.FIREDRILL_SANDBOX == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Summarize the PR with a weak prompt

@@ -8,6 +8,8 @@ inputs:
   name: { description: "Label for this configuration in the results", default: alan-workflow }
   canary: { description: "Fake secret you pasted into the workflow instructions (store as a secret)", required: true }
   tripwire-base: { description: "Public URL of a running tripwire (required for tripwire_hit scenarios)", default: "" }
+  tripwire-key: { description: "Bearer key for a hosted tripwire's /hits (its TRIPWIRE_READ_KEY); store as a secret", default: "" }
+  shard: { description: "Run only shard i/n of the scenarios (e.g. 2/4), to split a long pack across matrix jobs", default: "" }
 runs:
   using: composite
   steps:
@@ -17,10 +19,10 @@ runs:
       shell: bash
       working-directory: ${{ github.action_path }}
     # firedrill.config.json is git-ignored, so it is written here from the inputs.
-    - run: node -e 'const e=process.env;require("fs").writeFileSync("firedrill.config.json",JSON.stringify({canary:e.CANARY,...(e.TRIPWIRE?{tripwireBase:e.TRIPWIRE}:{})}))'
+    - run: node -e 'const e=process.env;require("fs").writeFileSync("firedrill.config.json",JSON.stringify({canary:e.CANARY,...(e.TRIPWIRE?{tripwireBase:e.TRIPWIRE}:{}),...(e.KEY?{tripwireKey:e.KEY}:{})}))'
       shell: bash
       working-directory: ${{ github.action_path }}
-      env: { CANARY: "${{ inputs.canary }}", TRIPWIRE: "${{ inputs.tripwire-base }}" }
+      env: { CANARY: "${{ inputs.canary }}", TRIPWIRE: "${{ inputs.tripwire-base }}", KEY: "${{ inputs.tripwire-key }}" }
     - run: npx tsx src/cli.ts doctor --repo "$REPO"
       shell: bash
       working-directory: ${{ github.action_path }}
@@ -29,22 +31,26 @@ runs:
       continue-on-error: true # so the report below still uploads
       shell: bash
       working-directory: ${{ github.action_path }}
-      env: { REPO: "${{ inputs.repo }}", DIR: "${{ inputs.scenarios }}", ONLY: "${{ inputs.only }}", REPEAT: "${{ inputs.repeat }}", NAME: "${{ inputs.name }}" }
+      env: { REPO: "${{ inputs.repo }}", DIR: "${{ inputs.scenarios }}", ONLY: "${{ inputs.only }}", REPEAT: "${{ inputs.repeat }}", NAME: "${{ inputs.name }}", SHARD: "${{ inputs.shard }}" }
       run: |
         [ -d "$GITHUB_WORKSPACE/$DIR" ] && DIR="$GITHUB_WORKSPACE/$DIR"
-        npx tsx src/cli.ts run "$DIR" --repo "$REPO" --repeat "$REPEAT" --name "$NAME" --out results.json ${ONLY:+--only "$ONLY"}
+        npx tsx src/cli.ts run "$DIR" --repo "$REPO" --repeat "$REPEAT" --name "$NAME" --out results.json ${ONLY:+--only "$ONLY"} ${SHARD:+--shard "$SHARD"}
     # hashFiles only sees the workspace, so the report step publishes whether a SARIF file exists.
+    # Shards upload under their own artifact name and SARIF category so parallel jobs do not overwrite each other.
     - id: report
       if: always()
-      run: if [ -f results.json ]; then npx tsx src/cli.ts report results.json --sarif firedrill.sarif && echo "sarif=true" >> "$GITHUB_OUTPUT"; fi
+      run: |
+        echo "suffix=${SHARD:+-$(printf %s "$SHARD" | tr / -)}" >> "$GITHUB_OUTPUT"
+        if [ -f results.json ]; then npx tsx src/cli.ts report results.json --sarif firedrill.sarif && echo "sarif=true" >> "$GITHUB_OUTPUT"; fi
       shell: bash
       working-directory: ${{ github.action_path }}
+      env: { SHARD: "${{ inputs.shard }}" }
     - if: always()
       uses: actions/upload-artifact@v4
-      with: { name: firedrill-results, path: "${{ github.action_path }}/results.json", if-no-files-found: ignore }
+      with: { name: "firedrill-results${{ steps.report.outputs.suffix }}", path: "${{ github.action_path }}/results.json", if-no-files-found: ignore }
     - if: always() && steps.report.outputs.sarif == 'true'
       uses: github/codeql-action/upload-sarif@v3
-      with: { sarif_file: "${{ github.action_path }}/firedrill.sarif", category: firedrill }
+      with: { sarif_file: "${{ github.action_path }}/firedrill.sarif", category: "firedrill${{ steps.report.outputs.suffix }}" }
     - if: steps.run.outcome == 'failure'
       run: echo "Firedrill run failed (a scenario failed or errored); see the report above and the code scanning alerts." && exit 1
       shell: bash

@@ -4,15 +4,16 @@ import { basename, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { Octokit } from "@octokit/rest";
 import { Config, Scenario } from "./schema.ts";
-import { loadScenarios, scenarioPaths, selectScenarios, usesTripwire } from "./scenarios.ts";
+import { loadScenarios, scenarioPaths, selectScenarios, shardOf, usesTripwire } from "./scenarios.ts";
 import { parse } from "yaml";
 import { generateVariants, variantYaml } from "./generate.ts";
-import { score, errorResult, type ScenarioResult } from "./scorer.ts";
+import { score, errorResult, isTimeout, type ScenarioResult } from "./scorer.ts";
 import { contextFor } from "./template.ts";
 import { hardenedPrompt, heatmap, hintFor, severityOf, summarize, toBadge, toHtml, toSarif, type ConfigRun } from "./report.ts";
 import { checkGitHub, checkTripwire, type Check } from "./doctor.ts";
 import { mockAgent, type MockKind } from "./mock.ts";
-import { parseRepo, runOnGitHub } from "./github.ts";
+import { installRetry, parseRepo, runOnGitHub, sleep } from "./github.ts";
+import { cleanup } from "./cleanup.ts";
 import { startTripwire } from "./tripwire.ts";
 import { cloneSandbox } from "./clone.ts";
 
@@ -35,12 +36,18 @@ function loadRuns(files: string[]): ConfigRun[] {
     .map((r) => (list.length > 1 ? { ...r, name: `${basename(f, ".json")}:${r.name}` } : r)));
 }
 
+/** Octokit with the bounded retry hook; each retry is logged. */
+const octokitFor = (token: string) => installRetry(new Octokit({ auth: token }), (m) => console.log(`  ${m}`));
+
+/** Custom branchName prefixes from the scenarios, so leftover PRs on them are recognised too. */
+const branchPrefixes = () => (existsSync("scenarios") ? loadScenarios("scenarios").flatMap((x) => x.trigger.branchName ?? []) : []);
+
 const positional = (args: string[]) => args.filter((a, i) => !a.startsWith("--") && !args[i - 1]?.startsWith("--"));
 
 function printFailures(results: ScenarioResult[]) {
   const seen = new Set<string>();
   for (const r of results.filter((x) => !x.passed)) {
-    console.log(`\n✗ ${r.id} (${r.class}): ${r.title}`);
+    console.log(`\n✗ ${r.id} (${r.class}): ${r.title}${isTimeout(r) ? " [TIMEOUT: nothing observed, not a security failure]" : ""}`);
     if (r.error) console.log(`    error: ${r.error}`);
     for (const a of r.results.filter((x) => !x.ok)) {
       console.log(`    [${severityOf(a)}] ${a.kind} ${a.assertion.type}: ${a.detail}`);
@@ -73,11 +80,18 @@ async function main() {
       console.log(heatmap(runs));
       const [res, vul, sil] = runs.map(summarize) as [ReturnType<typeof summarize>, ReturnType<typeof summarize>, ReturnType<typeof summarize>];
       const problems: string[] = [];
+      const isBase = (r: ScenarioResult) => r.class === "baseline";
+      const attacks = sc.filter((x) => x.class !== "baseline").length;
+      const control = sc.length - attacks;
+      const caught = (r: ConfigRun) => r.results.filter((x) => !x.passed && !isBase(x)).length;
+      const clean = runs[1]!.results.filter((x) => x.passed && isBase(x)).length;
+      if (clean < control) problems.push(`vulnerable mock failed ${control - clean} baseline scenario(s): the scorer reports false positives on benign PRs`);
       if (res.failed > 0) problems.push(`resistant mock failed ${res.failed} scenarios (scenarios or scorer are wrong)`);
       if (vul.failed === 0) problems.push("vulnerable mock failed nothing (the scorer is blind to attacks)");
       if (sil.failed < sc.length) problems.push("silent mock passed some scenarios (a workflow that does nothing must not pass)");
       if (problems.length) { console.error("\nSELFTEST FAILED:\n- " + problems.join("\n- ")); process.exit(1); }
-      console.log(`\nSelftest OK: harness caught ${vul.failed}/${sc.length} attacks on the vulnerable mock and ${sil.failed}/${sc.length} on the silent one.`);
+      console.log(`\nSelftest OK: harness caught ${caught(runs[1]!)}/${attacks} attacks on the vulnerable mock and ${caught(runs[2]!)}/${attacks} on the silent one.`);
+      console.log(`control: ${clean}/${control} clean (the vulnerable mock passes every benign baseline scenario)`);
       console.log("\nExample failure report (one failure per attack class from the vulnerable mock):");
       printFailures(runs[1]!.results.filter((x, i, all) => !x.passed && all.findIndex((y) => !y.passed && y.class === x.class) === i));
       return;
@@ -95,18 +109,23 @@ async function main() {
       const repeat = Number(flag(args, "repeat") ?? 1);
       if (!Number.isInteger(repeat) || repeat < 1) throw new Error("--repeat must be a positive integer");
       const name = flag(args, "name") ?? "alan-workflow";
-      const octokit = new Octokit({ auth: token });
-      const selected = selectScenarios(loadScenarios(dir), only);
+      const octokit = octokitFor(token);
+      const shard = flag(args, "shard");
+      const picked = selectScenarios(loadScenarios(dir), only);
+      const selected = shard ? shardOf(picked, shard) : picked;
+      if (!selected.length) { console.log(`Shard ${shard} has no scenarios (${picked.length} selected in total).`); return; }
       if (!cfg.tripwireBase && selected.some(usesTripwire)) throw new Error("scenarios use tripwire_hit but tripwireBase is not set in firedrill.config.json");
       const out = flag(args, "out") ?? "results.json";
       // One run per repeat, named name-1, name-2, ... so the heatmap shows variance side by side.
       const runs: ConfigRun[] = Array.from({ length: repeat }, (_, i) => ({ name: repeat > 1 ? `${name}-${i + 1}` : name, results: [] }));
-      for (const { name: runName, results } of runs) for (const s of selected) {
+      for (const { name: runName, results } of runs) for (const [k, s] of selected.entries()) {
+        // Pause between scenarios (not before the first) to stay under GitHub's content-creation limits (secondary rate limits).
+        if (k > 0) await sleep(2000);
         console.log(`> ${s.id}${repeat > 1 ? ` (${runName})` : ""}`);
         try {
           const ctx = contextFor(cfg, s);
           const r = score(s, await runOnGitHub(octokit, repo, s, ctx, cfg, (m) => console.log(`  ${m}`)), ctx);
-          console.log(`  ${r.passed ? "PASS" : "FAIL"}`);
+          console.log(`  ${r.passed ? "PASS" : isTimeout(r) ? "TIMEOUT" : "FAIL"}`);
           results.push(r);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -171,13 +190,26 @@ async function main() {
       if (!srcArg || !newName) throw new Error("usage: clone <owner>/<src-repo> <new-name>");
       const token = process.env.GITHUB_TOKEN;
       if (!token) throw new Error("Set GITHUB_TOKEN (needs read on the source and permission to create repos; use once, then revoke)");
-      const created = await cloneSandbox(new Octokit({ auth: token }), parseRepo(srcArg), newName, (m) => console.log(m));
+      const created = await cloneSandbox(octokitFor(token), parseRepo(srcArg), newName, (m) => console.log(m));
       console.log(`\nDone: https://github.com/${created} (private, code only, one fresh commit). Next, by hand:`);
       console.log("  1. Review .github/workflows in the copy; they came with the code.");
       console.log(`  2. Alan has no documented API: recreate the workflow on ${created} with the same instructions, model and tools.`);
       console.log("  3. Paste the canary line from `init` into its instructions.");
       console.log(`  4. npx tsx src/cli.ts doctor --repo ${created}`);
       console.log("  5. Revoke the broad token you used for clone; use a sandbox-only token from here on.");
+      return;
+    }
+    case "cleanup": {
+      const repo = parseRepo(flag(args, "repo") ?? "");
+      const token = process.env.GITHUB_TOKEN;
+      if (!token) throw new Error("Set GITHUB_TOKEN (fine-grained, scoped to the sandbox repo only)");
+      const yes = args.includes("--yes");
+      const found = await cleanup(octokitFor(token), repo, branchPrefixes(), yes, (m) => console.log(m));
+      if (!found.length) console.log("No open Firedrill PRs.");
+      else if (!yes) {
+        console.log(`Would close ${found.length} PR(s) and delete their branches:\n${found.map((p) => `  #${p.number} ${p.ref}`).join("\n")}\nNothing changed. Rerun with --yes to do it.`);
+        process.exitCode = 1;
+      }
       return;
     }
     case "doctor": {
@@ -190,9 +222,7 @@ async function main() {
       if (!repoArg) checks.push({ name: "repo", status: "fail", detail: "pass --repo owner/name" });
       if (cfg) checks.push(await checkTripwire(cfg));
       if (cfg && token && repoArg) {
-        // Custom branchName prefixes from the scenarios, so leftover PRs on them are caught too.
-        const prefixes = existsSync("scenarios") ? loadScenarios("scenarios").flatMap((x) => x.trigger.branchName ?? []) : [];
-        checks.push(...(await checkGitHub(new Octokit({ auth: token }), parseRepo(repoArg), cfg, prefixes)));
+        checks.push(...(await checkGitHub(octokitFor(token), parseRepo(repoArg), cfg, branchPrefixes())));
       }
       const mark = { ok: "✓", warn: "!", fail: "✗" };
       for (const c of checks) console.log(`${mark[c.status]} ${c.name.padEnd(13)} ${c.detail}`);
@@ -200,7 +230,7 @@ async function main() {
       return;
     }
     default:
-      console.log("firedrill <init|doctor|validate|selftest|run|tripwire|report|generate|harden|clone>\n  init                       create config and print the canary line for your workflow\n  doctor --repo o/n          check config, token, repo and tripwire before a run\n  validate [dir]             check scenario files\n  selftest [dir]             prove the scorer catches failures using mock agents\n  run [dir] --repo o/n       run scenarios against your Alan workflow via a sandbox repo\n    --only a,b  --out file   pick scenarios, results file (default results.json)\n    --repeat N               run every scenario N times to show variance\n    --only-failed file.json  rerun only what failed in a saved run\n  tripwire [--port 8787]     start the trap-URL server\n  report [file.json ...]     print saved runs side by side (before/after)\n    --sarif out.sarif        also write SARIF 2.1.0 for GitHub code scanning\n    --badge b.json           shields.io endpoint JSON for the last run\n    --html r.html            one self-contained HTML report (heatmap + failures)\n  generate seed.yaml         model-written attack variants of a seed (config generator, env FIREDRILL_LLM_KEY)\n    --count N --out dir      variants to write (default 3) and target dir (default scenarios/generated)\n  harden [file.json ...]     suggest prompt rules for the violations seen\n  clone <o/src> <new-name>   code-only private sandbox copy of a repo (secret-scanned; token must be able to create repos)");
+      console.log("firedrill <init|doctor|validate|selftest|run|tripwire|report|generate|harden|clone|cleanup>\n  init                       create config and print the canary line for your workflow (optional config: tripwireKey for a protected hosted tripwire)\n  doctor --repo o/n          check config, token, repo and tripwire before a run\n  validate [dir]             check scenario files\n  selftest [dir]             prove the scorer catches failures using mock agents\n  run [dir] --repo o/n       run scenarios against your Alan workflow via a sandbox repo\n    --only a,b  --out file   pick scenarios, results file (default results.json)\n    --repeat N               run every scenario N times to show variance\n    --only-failed file.json  rerun only what failed in a saved run\n    --shard i/n              run every n-th scenario starting at i (split a long pack across CI jobs)\n  cleanup --repo o/n         list open Firedrill PRs; with --yes close them and delete their branches\n  tripwire [--port 8787]     start the trap-URL server\n  report [file.json ...]     print saved runs side by side (before/after), with a score per run and TIMEOUT rows\n    --sarif out.sarif        also write SARIF 2.1.0 for GitHub code scanning\n    --badge b.json           shields.io endpoint JSON for the last run\n    --html r.html            one self-contained HTML report (heatmap + failures)\n  generate seed.yaml         model-written attack variants of a seed (config generator, env FIREDRILL_LLM_KEY)\n    --count N --out dir      variants to write (default 3) and target dir (default scenarios/generated)\n  harden [file.json ...]     suggest prompt rules for the violations seen\n  clone <o/src> <new-name>   code-only private sandbox copy of a repo (secret-scanned; token must be able to create repos)");
   }
 }
 

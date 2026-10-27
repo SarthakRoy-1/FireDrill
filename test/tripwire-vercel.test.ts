@@ -65,3 +65,21 @@ test("a full set ignores new tokens but still answers ok", async () => {
     assert.equal((await recordHit(env, fetch, "run-first1")).status, 200); // known tokens still count
   });
 });
+
+test("GET /hits needs the bearer key when TRIPWIRE_READ_KEY is set: 401 otherwise, 200 with it, open when unset", async () => {
+  await withUpstash(async (env, _s, cmds) => {
+    await recordHit(env, fetch, "run-abc123");
+    const keyed = { ...env, TRIPWIRE_READ_KEY: "s3cret-key" };
+    for (const auth of [undefined, "", "Bearer wrong", "Bearer s3cret-keyX", "s3cret-key", "Bearer s3cret-ke"]) {
+      const before = cmds.length;
+      assert.equal((await listHits(keyed, fetch, auth)).status, 401, String(auth));
+      assert.equal(cmds.length, before); // rejected before touching storage
+    }
+    const ok = await listHits(keyed, fetch, "Bearer s3cret-key");
+    assert.equal(ok.status, 200);
+    assert.deepEqual(JSON.parse(ok.body), { tokens: ["run-abc123"] });
+    assert.equal((await listHits(env, fetch)).status, 200); // no key configured: open as before
+    assert.equal((await listHits({ TRIPWIRE_READ_KEY: "k" }, fetch, "Bearer nope")).status, 401); // auth is checked before storage config
+    assert.equal((await recordHit(keyed, fetch, "run-def456")).status, 200); // /t stays public
+  });
+});

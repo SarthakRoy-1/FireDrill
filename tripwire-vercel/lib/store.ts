@@ -1,6 +1,8 @@
 // Tripwire storage on Upstash Redis over its REST API. Same HTTP contract as src/tripwire.ts.
 // No Vercel types and no dependencies, so test/tripwire-vercel.test.ts can run it against a stub.
-export interface Env { KV_REST_API_URL?: string; KV_REST_API_TOKEN?: string }
+import { timingSafeEqual } from "node:crypto";
+export interface Env { KV_REST_API_URL?: string; KV_REST_API_TOKEN?: string; TRIPWIRE_READ_KEY?: string }
+type Kv = { KV_REST_API_URL: string; KV_REST_API_TOKEN: string };
 export type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>;
 export interface Reply { status: number; type: string; body: string }
 
@@ -10,14 +12,14 @@ const TTL_SECONDS = 7 * 24 * 3600;
 // shortcut: new tokens are ignored past 10000 members so a flood cannot grow storage; raise it if one deployment serves more runs than that in a week.
 const MAX_TOKENS = 10_000;
 
-async function cmd(env: Required<Env>, f: Fetch, args: (string | number)[]): Promise<unknown> {
+async function cmd(env: Kv, f: Fetch, args: (string | number)[]): Promise<unknown> {
   const res = await f(env.KV_REST_API_URL, { method: "POST", headers: { authorization: `Bearer ${env.KV_REST_API_TOKEN}`, "content-type": "application/json" }, body: JSON.stringify(args) });
   const j = (await res.json().catch(() => ({}))) as { result?: unknown; error?: string };
   if (!res.ok || j.error) throw new Error(`Upstash ${args[0]} failed: HTTP ${res.status}${j.error ? ` ${j.error}` : ""}`);
   return j.result;
 }
 
-const needEnv = (env: Env): Required<Env> | undefined =>
+const needEnv = (env: Env): Kv | undefined =>
   env.KV_REST_API_URL && env.KV_REST_API_TOKEN ? { KV_REST_API_URL: env.KV_REST_API_URL, KV_REST_API_TOKEN: env.KV_REST_API_TOKEN } : undefined;
 
 const text = (status: number, body: string): Reply => ({ status, type: "text/plain", body });
@@ -40,8 +42,16 @@ export async function recordHit(env: Env, f: Fetch, token: string): Promise<Repl
   }
 }
 
-/** GET /hits: {"tokens":[...]}. Never a silent 200 when storage is missing or failing. */
-export async function listHits(env: Env, f: Fetch): Promise<Reply> {
+/** True when no read key is set, or the Authorization header is "Bearer <key>". Compares equal-length buffers in constant time. */
+export function readAllowed(env: Env, authorization?: string): boolean {
+  if (!env.TRIPWIRE_READ_KEY) return true;
+  const want = Buffer.from(`Bearer ${env.TRIPWIRE_READ_KEY}`), got = Buffer.from(authorization ?? "");
+  return got.length === want.length && timingSafeEqual(got, want); // shortcut: the length check leaks the key length, which is not a secret worth hiding here.
+}
+
+/** GET /hits: {"tokens":[...]}. 401 when TRIPWIRE_READ_KEY is set and the bearer key is wrong. Never a silent 200 when storage is missing or failing. */
+export async function listHits(env: Env, f: Fetch, authorization?: string): Promise<Reply> {
+  if (!readAllowed(env, authorization)) return text(401, "unauthorized");
   const e = needEnv(env);
   if (!e) return MISSING;
   try {

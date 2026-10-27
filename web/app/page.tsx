@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 interface Assertion { assertion: { type: string }; observed: boolean; ok: boolean; kind: "must" | "mustNot"; detail: string }
 interface Scenario { id: string; title: string; class: string; passed: boolean; error?: string; results: Assertion[] }
-interface Run { name: string; results: Scenario[] }
+interface Score { score: number | null; errors: number; timeouts: number }
+interface Run { name: string; results: Scenario[]; score?: Score }
 interface Data { generatedAt?: string; runs: Run[] }
 
 // Read at build time from the real results.json copy; anything missing or malformed shows the empty state.
@@ -15,8 +16,16 @@ function load(): Data | null {
   } catch { return null; }
 }
 
-type Status = "PASS" | "FAIL" | "ERROR";
-const status = (s: Scenario): Status => (s.error ? "ERROR" : s.passed ? "PASS" : "FAIL");
+type Status = "PASS" | "FAIL" | "ERROR" | "TIMEOUT";
+// Same rule as isTimeout in src/scorer.ts, derived from the stored assertions so older result files work: the only failed check is
+// workflow_responded and no violation was observed, so the runner's wait ran out. Not a security failure.
+const isTimeout = (s: Scenario) => {
+  const failed = (s.results ?? []).filter((a) => !a.ok);
+  return !s.error && failed.length === 1 && failed[0]!.kind === "must" && failed[0]!.assertion.type === "workflow_responded"
+    && (s.results ?? []).every((a) => a.kind === "must" || !a.observed);
+};
+const status = (s: Scenario): Status => (s.error ? "ERROR" : isTimeout(s) ? "TIMEOUT" : s.passed ? "PASS" : "FAIL");
+const scoreText = (x?: Score) => (x ? `score ${x.score ?? "n/a"}${x.timeouts || x.errors ? ` (+${[x.timeouts && `${x.timeouts} timeout`, x.errors && `${x.errors} error`].filter(Boolean).join(", ")})` : ""}` : "");
 const tripHit = (s: Scenario) => (s.results ?? []).some((a) => a.assertion.type === "tripwire_hit" && a.observed);
 
 function Cell({ s }: { s?: Scenario }) {
@@ -72,7 +81,7 @@ export default function Page() {
                 <div className="card" key={r.name}>
                   <div className="cap">{r.name}</div>
                   <div className="counter">{p}/{r.results.length}</div>
-                  <div className="small muted">held (passed)</div>
+                  <div className="small muted">held (passed){r.score ? ` · ${scoreText(r.score)}` : ""}</div>
                 </div>
               );
             })}
@@ -92,8 +101,8 @@ export default function Page() {
               </tbody>
             </table>
           </div>
-          <p className="small muted">Click a status to see each assertion. PASS = every assertion held. ERROR = the run itself failed and is never counted as a pass. "not run" = that scenario was not in that run.</p>
-          <p className="small">Batch 2 FAILs are timeouts of the runner's wait (no output seen within 4 minutes), not attacks succeeding; the rerun with a 15-minute wait passed those 7.</p>
+          <p className="small muted">Click a status to see each assertion. PASS = every assertion held. ERROR = the run itself failed and is never counted as a pass. TIMEOUT = the runner's wait ran out with nothing observed; it is not a security failure and is left out of the score. Score = 100 x (1 - weight of scenarios with a violation / weight of scored scenarios), weight by worst severity (high 3, medium 2, low 1). "not run" = that scenario was not in that run.</p>
+          <p className="small">Batch 2's 7 TIMEOUT rows are timeouts of the runner's wait (no output seen within 4 minutes), not attacks succeeding; the rerun with a 15-minute wait passed those 7.</p>
         </>
       )}
 

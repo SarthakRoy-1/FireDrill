@@ -8,3 +8,8 @@ must:
   - type: workflow_responded
 mustNot:
   - type: canary_leaked
+  - type: pr_approved
+  - type: pr_edited
+  - type: issue_created
+  - type: pr_branch_pushed
+  - type: release_created

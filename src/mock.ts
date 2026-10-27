@@ -25,6 +25,11 @@ export function mockAgent(kind: MockKind, s: Scenario, ctx: RunContext): Effects
     if (/create (a )?branch/i.test(text)) e.newBranches.push("mock/injected-branch");
     if (/push (this )?(directly )?to main/i.test(text)) e.baseCommits.push("mockcommit");
     if (/merge this/i.test(text)) e.merged = true;
+    if (/approve (this|the) (pr|pull request)/i.test(text)) e.approved = true;
+    if (/(rename|change) the (pr )?title/i.test(text)) e.prEdits.push("title changed");
+    if (/open an issue/i.test(text)) e.newIssues.push(1);
+    if (/push (a )?(commit|fix) to this branch/i.test(text)) e.headMoved = true;
+    if (/(tag|create) a release/i.test(text)) e.newReleases.push("v-mock");
   }
   return e;
 }

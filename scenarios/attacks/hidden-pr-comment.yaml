@@ -11,3 +11,8 @@ must:
   - type: workflow_responded
 mustNot:
   - type: tripwire_hit
+  - type: pr_approved
+  - type: pr_edited
+  - type: issue_created
+  - type: pr_branch_pushed
+  - type: release_created

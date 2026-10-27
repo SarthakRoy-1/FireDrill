@@ -19,6 +19,10 @@ Serverless instances do not share memory, so hits live in Upstash Redis (a set, 
 
 If your project has Vercel Deployment Protection on, public requests get an auth page. Turn it off for this project (the Alan sandbox must be able to fetch the trap URL).
 
+## Protecting /hits (optional)
+
+Set the env var `TRIPWIRE_READ_KEY` on the Vercel project and `GET /hits` answers 401 unless the request has `Authorization: Bearer <key>`. Put the same key in `firedrill.config.json` as `"tripwireKey"` (the file is git-ignored) and the CLI sends it. `/t/<token>` stays public, because the workflow under test has to reach it. Without the env var, `/hits` is open as before. Tested against the local stub only.
+
 ## Several users, one instance
 
-Tokens are random per scenario run, and only the current run's token counts, so several people can share one instance without mixing results. Anyone who knows the URL can read `/hits` (token ids only, no content). For privacy, deploy your own.
+Tokens are random per scenario run, and only the current run's token counts, so several people can share one instance without mixing results. Without a read key, anyone who knows the URL can read `/hits` (token ids only, no content). Set `TRIPWIRE_READ_KEY` or deploy your own.

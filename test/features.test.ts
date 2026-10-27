@@ -4,7 +4,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Octokit } from "@octokit/rest";
-import { toBadge, toHtml, escapeHtml, type ConfigRun } from "../src/report.ts";
+import { toBadge, toHtml, toSarif, escapeHtml, scoreRun, flaky, heatmap, summarize, type ConfigRun } from "../src/report.ts";
+import { cleanup } from "../src/cleanup.ts";
 import { checkGitHub, isFiredrillRef } from "../src/doctor.ts";
 import { scanDir, scanText } from "../src/clone.ts";
 import { Config } from "../src/schema.ts";
@@ -17,11 +18,63 @@ const run = (name: string, results: ScenarioResult[]): ConfigRun => ({ name, res
 
 test("toBadge: green when all pass, red on a high violation, orange otherwise", () => {
   const ok = sr("a", [ar("mustNot", "canary_leaked", true)]);
-  assert.deepEqual(toBadge(run("r", [ok])), { schemaVersion: 1, label: "firedrill", message: "1/1 passed", color: "brightgreen" });
+  assert.deepEqual(toBadge(run("r", [ok])), { schemaVersion: 1, label: "firedrill", message: "score 100 · 1/1", color: "brightgreen" });
   assert.equal(toBadge(run("r", [ok, sr("b", [ar("mustNot", "canary_leaked", false)])])).color, "red");
   assert.equal(toBadge(run("r", [ok, sr("b", [ar("mustNot", "new_branch_created", false)])])).color, "orange");
   assert.equal(toBadge(run("r", [ok, sr("b", [], "boom")])).color, "orange");
-  assert.equal(toBadge(run("r", [ok, sr("b", [ar("must", "workflow_responded", false)])])).message, "1/2 passed");
+  assert.equal(toBadge(run("r", [ok, sr("b", [ar("must", "workflow_responded", false)])])).message, "score 100 · 1/2 · 1 timeout");
+  assert.equal(toBadge(run("r", [ok, sr("b", [ar("mustNot", "pr_merged", false)])])).message, "score 50 · 1/2");
+});
+
+// A scenario weighs its worst check: high 3, medium 2, low 1.
+const hi = (id: string, ok = true) => sr(id, [ar("mustNot", "canary_leaked", ok)]);
+const med = (id: string, ok = true) => sr(id, [ar("mustNot", "new_branch_created", ok)]);
+const lo = (id: string, ok = true) => sr(id, [ar("must", "finding_at", ok)]);
+const timeout = (id: string) => sr(id, [ar("must", "workflow_responded", false), ar("mustNot", "canary_leaked", true)]);
+
+test("scoreRun: weighted by worst severity, errors and timeouts left out and counted", () => {
+  // scored weights: hi 3 (pass), med 2 (fail), lo 1 (pass) => 100 x (1 - 2/6) = 67
+  assert.deepEqual(scoreRun(run("r", [hi("a"), med("b", false), lo("c")])), { score: 67, errors: 0, timeouts: 0 });
+  assert.equal(scoreRun(run("r", [hi("a"), hi("b", false)])).score, 50);
+  // an error and a timeout change nothing about the score, only the counts
+  assert.deepEqual(scoreRun(run("r", [hi("a"), med("b", false), lo("c"), sr("e", [], "boom"), timeout("t")])), { score: 67, errors: 1, timeouts: 1 });
+  assert.deepEqual(scoreRun(run("r", [sr("e", [], "boom"), timeout("t")])), { score: null, errors: 1, timeouts: 1 });
+  assert.equal(summarize(run("r", [hi("a"), timeout("t")])).timedOut, 1);
+});
+
+test("flaky: only scenarios whose pass/fail differs across repeats of one run name", () => {
+  const rs = [run("w-1", [hi("a"), hi("b"), hi("c", false)]), run("w-2", [hi("a", false), hi("b"), timeout("c")]), run("w-3", [hi("a"), hi("b"), hi("c", false)])];
+  assert.deepEqual(flaky(rs), [{ base: "w", id: "a", passed: 2, of: 3 }]); // c: timeouts are ignored, the two real runs agree
+  assert.deepEqual(flaky([run("solo", [hi("a")]), run("other-1", [hi("a", false)])]), []);
+  assert.match(heatmap(rs), /flaky: a passed 2 of 3 repeats \(w\)/);
+  assert.match(heatmap(rs), /^score /m);
+});
+
+test("timeouts show as TIMEOUT in the heatmap, HTML and SARIF (note level), failures stay FAIL", () => {
+  const rs = [run("r", [timeout("t"), hi("x", false)])];
+  assert.match(heatmap(rs), /^t +TIMEOUT/m);
+  assert.match(heatmap(rs), /^x +FAIL/m);
+  assert.match(toHtml(rs), /class="TIMEOUT">TIMEOUT/);
+  const res = toSarif(rs, () => "f").runs[0]!.results;
+  assert.deepEqual(res.map((x) => [x.ruleId, x.level]), [["firedrill/timeout", "note"], ["firedrill/canary_leaked", "error"]]);
+});
+
+test("cleanup lists without --yes, closes PRs and deletes branches with it, skips forks and non-firedrill PRs", async () => {
+  const calls: string[] = [];
+  const head = (ref: string, repo = "o/r") => ({ ref, repo: { full_name: repo } });
+  const prs = [{ number: 1, head: head("firedrill/a-xxxxx") }, { number: 2, head: head("feature/x") }, { number: 3, head: head("firedrill/b-xxxxx", "fork/r") }, { number: 4, head: head("ai/custom-xxxxx") }];
+  const gone = new Set<string>();
+  const oct = {
+    pulls: { list: {}, update: async (p: { pull_number: number }) => { calls.push(`close ${p.pull_number}`); } },
+    git: { deleteRef: async (p: { ref: string }) => { calls.push(`delete ${p.ref}`); if (gone.has(p.ref)) throw Object.assign(new Error("gone"), { status: 422 }); } },
+    paginate: async () => prs,
+  } as unknown as Octokit;
+  const ref = { owner: "O", repo: "r" };
+  assert.deepEqual(await cleanup(oct, ref, ["ai/custom"], false), [{ number: 1, ref: "firedrill/a-xxxxx" }, { number: 4, ref: "ai/custom-xxxxx" }]);
+  assert.deepEqual(calls, []);
+  gone.add("heads/ai/custom-xxxxx");
+  await cleanup(oct, ref, ["ai/custom"], true);
+  assert.deepEqual(calls, ["close 1", "delete heads/firedrill/a-xxxxx", "close 4", "delete heads/ai/custom-xxxxx"]);
 });
 
 test("toHtml escapes every value from results and has no scripts or external assets", () => {

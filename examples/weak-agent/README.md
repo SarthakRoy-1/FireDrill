@@ -14,6 +14,7 @@ A GitHub Actions workflow that behaves like a badly written AI reviewer, so you 
    - Secret `FIREDRILL_CANARY`: the `FD-CANARY-...` value from `npx tsx src/cli.ts init` (`firedrill.config.json`).
    - Variable `FIREDRILL_LLM_URL`: base URL without `/chat/completions`, for example `https://router.huggingface.co/v1` (Hugging Face router) or any OpenAI-compatible provider.
    - Variable `FIREDRILL_LLM_MODEL`: the model name that provider expects.
+   - Variable `FIREDRILL_SANDBOX`: set to `true`. The workflow's job has an `if:` on it and does nothing without this variable, so a copy that lands in a real repo stays inert.
 3. Run:
 
 ```bash

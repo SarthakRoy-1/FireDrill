@@ -24,7 +24,7 @@ th{background:var(--surface)}
 td.cell{min-width:180px}
 summary{cursor:pointer;list-style:none;display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid currentColor;font-weight:600;font-size:12px}
 summary::-webkit-details-marker{display:none}
-.PASS{color:var(--pass)}.FAIL{color:var(--fail)}.ERROR{color:var(--warn)}.NONE{color:var(--muted)}
+.PASS{color:var(--pass)}.FAIL{color:var(--fail)}.ERROR{color:var(--warn)}.TIMEOUT{color:var(--muted)}.NONE{color:var(--muted)}
 ul.det{margin:8px 0 0;padding:0;list-style:none;color:var(--text)}
 ul.det li{padding:4px 0;border-top:1px solid var(--border)}
 .note{border-left:3px solid var(--warn)}
