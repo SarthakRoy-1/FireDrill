@@ -11,13 +11,19 @@ export function Mark() {
 export default function Nav() {
   const path = (usePathname() || "/").replace(/\/?$/, "/");
   const on = (h: string) => (h === "/" ? path === "/" : path.startsWith(h));
+  // A link to the current page would make Next jump to the top instantly (it turns smooth scroll off for route changes), so glide there instead.
+  const toTop = (h: string) => (e: React.MouseEvent) => {
+    if (h !== path || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  };
   return (
     <header className="site">
       <div className="site-in">
-        <Link href="/" className="logo" aria-label="Firedrill home"><Mark />Firedrill</Link>
+        <Link href="/" className="logo" aria-label="Firedrill home" onClick={toTop("/")}><Mark />Firedrill</Link>
         <nav aria-label="Main">
           <ul>
-            {items.map(([h, l]) => <li key={h}><Link href={h} aria-current={on(h) ? "page" : undefined}>{h === "/run/" ? <>Run it<span className="nav-more"> yourself</span></> : l}</Link></li>)}
+            {items.map(([h, l]) => <li key={h}><Link href={h} onClick={toTop(h)} aria-current={on(h) ? "page" : undefined}>{h === "/run/" ? <>Run it<span className="nav-more"> yourself</span></> : l}</Link></li>)}
           </ul>
         </nav>
       </div>

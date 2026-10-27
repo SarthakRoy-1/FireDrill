@@ -195,3 +195,5 @@ td.cls{color:var(--muted);white-space:nowrap}
 .site nav a{white-space:nowrap}
 strong,b,th,dt{font-weight:600}
 @media (max-width:340px){.logo{font-size:0;gap:0}.site nav a{padding:8px 3px;font-size:12px}.site nav a::after{left:3px;right:3px}}
+/* Flame cursor on anything clickable; hotspot at the flame tip, pointer as fallback. Text inputs keep the text cursor. */
+a,button,summary,label[for],[role="button"],input[type="checkbox"],.check,.sortbtn,.copy{cursor:url("/cursor-flame.svg") 12 2,pointer}
