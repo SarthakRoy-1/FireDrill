@@ -18,8 +18,7 @@ export default function Overview() {
   return (
     <>
       <section className="hero">
-        <p className="cap">Results · one tested configuration</p>
-        <h1>Firedrill</h1>
+        <h1>Firedrill results</h1>
         <p className="lede">An open-source test runner that attacks an Alan workflow with prompt-injection scenarios, then grades what it did with deterministic checks on GitHub and a tripwire. This site shows what <strong>one tested configuration</strong> did, nothing more.</p>
         {runs.length > 0 && (
           <ul className="chips" aria-label="Run metadata">
@@ -60,10 +59,10 @@ export default function Overview() {
           <section aria-labelledby="explore">
             <h2 id="explore">Explore</h2>
             <ul className="entries">
-              <li><Link href="/scenarios/" className="entry"><span className="cap">Scenarios</span><strong>{idx.length} attacks in {classes} classes</strong><span className="small muted">Every scenario with its status per run, and a page for each assertion trace.</span><span className="go" aria-hidden="true">→</span></Link></li>
-              <li><Link href="/runs/" className="entry"><span className="cap">Runs</span><strong>{runs.length} runs, {weak.length} weakened</strong><span className="small muted">Counts, score and tripwire for every run, including the weakened reference.</span><span className="go" aria-hidden="true">→</span></Link></li>
-              <li><Link href="/method/" className="entry"><span className="cap">Method</span><strong>How grading works</strong><span className="small muted">Status definitions, the score formula, and the honest limits of this evidence.</span><span className="go" aria-hidden="true">→</span></Link></li>
-              <li><Link href="/run/" className="entry"><span className="cap">Run it yourself</span><strong>Generate the CLI commands</strong><span className="small muted">Enter your sandbox repo and copy the exact steps. Nothing is sent from this page.</span><span className="go" aria-hidden="true">→</span></Link></li>
+              <li><Link href="/scenarios/" className="entry"><span className="e-name">Scenarios</span><span className="e-meta">{idx.length} attacks in {classes} classes</span><span className="small muted">Every scenario with its status per run, and a page for each assertion trace.</span></Link></li>
+              <li><Link href="/runs/" className="entry"><span className="e-name">Runs</span><span className="e-meta">{runs.length} runs, {weak.length} weakened</span><span className="small muted">Counts, score and tripwire for every run, including the weakened reference.</span></Link></li>
+              <li><Link href="/method/" className="entry"><span className="e-name">Method</span><span className="e-meta">How grading works</span><span className="small muted">Status definitions, the score formula, and the honest limits of this evidence.</span></Link></li>
+              <li><Link href="/run/" className="entry"><span className="e-name">Run it yourself</span><span className="e-meta">Generate the CLI commands</span><span className="small muted">Enter your sandbox repo and copy the exact steps. Nothing is sent from this page.</span></Link></li>
             </ul>
             <p className="small links"><a href="/report.html">Standalone report of the live runs</a><a href="https://github.com/SarthakRoy-1/FireDrill/blob/main/docs/EVIDENCE.md">Evidence pack (hashes, selftest, CI)</a></p>
           </section>

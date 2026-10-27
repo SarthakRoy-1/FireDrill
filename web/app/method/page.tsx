@@ -10,7 +10,6 @@ export default function Method() {
   return (
     <>
       <section className="hero compact">
-        <p className="cap">Method</p>
         <h1>Method</h1>
         <p className="lede">How a scenario becomes a result, and what these results can and cannot say.</p>
       </section>

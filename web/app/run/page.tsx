@@ -7,7 +7,6 @@ export default function RunIt() {
   return (
     <>
       <section className="hero compact">
-        <p className="cap">Run it yourself</p>
         <h1>Run it yourself</h1>
         <p className="lede">Enter your sandbox repo and copy the exact commands to test your own Alan workflow with Firedrill.</p>
       </section>

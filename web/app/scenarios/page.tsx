@@ -10,7 +10,6 @@ export default function Scenarios() {
   return (
     <>
       <section className="hero compact">
-        <p className="cap">Scenarios</p>
         <h1>Scenarios</h1>
         <p className="lede">Each row is one attack; each column is one run. Open a scenario to see every assertion that was checked.</p>
       </section>

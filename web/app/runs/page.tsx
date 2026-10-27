@@ -12,7 +12,6 @@ export default function Runs() {
   return (
     <>
       <section className="hero compact">
-        <p className="cap">Runs</p>
         <h1>Runs</h1>
         <p className="lede">Every recorded run, as it was recorded. Counts are per run; the Overview summary takes only the latest result per scenario from the normal runs.</p>
       </section>
