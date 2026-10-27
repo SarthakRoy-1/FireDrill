@@ -155,25 +155,164 @@ export function toBadge(run: ConfigRun) {
 export const escapeHtml = (v: unknown): string =>
   String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-const CSS = "body{font:14px system-ui,sans-serif;margin:2rem;color:#111}table{border-collapse:collapse}th,td{border:1px solid #ccc;padding:4px 8px;text-align:left}.PASS{background:#d4f4dd}.FAIL{background:#f9d0d0}.ERROR{background:#fde5b8}.TIMEOUT{background:#e3e3e3}.s-high{color:#b00020;font-weight:700}li{margin:.4rem 0}pre{white-space:pre-wrap}";
+const CSS = `
+:root{color-scheme:light dark;--bg:#fff;--surface:#f5f6f8;--border:#d8dce2;--text:#14181f;--muted:#5b6572;--pass:#1a7f4b;--fail:#c62828;--warn:#b26a00;--accent:#d9480f;--idle:#5b6572;
+--pass-bg:#e6f4ec;--fail-bg:#fbeaea;--warn-bg:#fbf0dc;--idle-bg:#eceef1;
+--sans:"Inter","Segoe UI Variable","Segoe UI",-apple-system,system-ui,sans-serif;--mono:"JetBrains Mono","Cascadia Mono",ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--surface:#161b22;--border:#2a313c;--text:#e6e9ee;--muted:#8b95a3;--pass:#3fb97a;--fail:#ff6b6b;--warn:#e0a030;--accent:#ff7a3d;--idle:#8b95a3;
+--pass-bg:#12261c;--fail-bg:#2b1517;--warn-bg:#2a2010;--idle-bg:#1d232c}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent);color:#fff}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{max-width:1040px;margin:0 auto;padding:56px 24px 72px}
+h1,h2,h3,h4{margin:0;line-height:1.2;text-wrap:balance}
+h1{font-size:2.25rem;font-weight:700;letter-spacing:-.03em}
+h2{font-size:1.25rem;font-weight:650;letter-spacing:-.015em;margin:56px 0 8px}
+h3{font-size:1.0625rem;font-weight:650;letter-spacing:-.01em}
+h4{font-size:1rem;font-weight:600}
+p{margin:0}
+.sub{font-size:1.125rem;color:var(--muted);margin-top:8px}
+.meta{display:flex;flex-wrap:wrap;gap:4px 24px;margin-top:20px;color:var(--muted);font-size:.875rem}
+.meta b{color:var(--text);font-weight:600}
+.lede{color:var(--muted);max-width:68ch;margin-top:4px}
+.num,td.c,.score{font-variant-numeric:tabular-nums}
+code{font-family:var(--mono);font-size:.875em}
+.brand{color:var(--accent)}
+.runs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:12px}
+.run{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:20px}
+.run.ref{background:transparent;border-style:dashed}
+.run h3{display:flex;flex-wrap:wrap;gap:8px;align-items:center;overflow-wrap:anywhere}
+.tag{font:600 .6875rem/1 var(--sans);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--border);border-radius:4px;padding:4px 6px;color:var(--muted);vertical-align:middle}
+.score{font-size:2.5rem;font-weight:700;letter-spacing:-.04em;line-height:1;margin:16px 0 4px}
+.score small{font-size:.875rem;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:6px}
+.counts{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 0;padding:0;list-style:none}
+.trip{margin-top:14px;font-size:.875rem;color:var(--muted)}
+.trip b{color:var(--text);font-weight:600}
+.group{margin-top:28px;font-size:.8125rem;font-weight:600;color:var(--muted);letter-spacing:.02em}
+.pill{display:inline-flex;align-items:center;gap:5px;font:600 .75rem/1 var(--sans);letter-spacing:.02em;border:1px solid currentColor;border-radius:999px;padding:5px 9px 5px 7px;white-space:nowrap}
+.pill svg{width:12px;height:12px;flex:none}
+.pill.PASS{color:var(--pass);background:var(--pass-bg)}
+.pill.FAIL{color:var(--fail);background:var(--fail-bg)}
+.pill.ERROR{color:var(--warn);background:var(--warn-bg)}
+.pill.TIMEOUT{color:var(--idle);background:var(--idle-bg)}
+.pill.NA{color:var(--muted);background:transparent;border-style:dashed}
+.scroll{overflow-x:auto;margin-top:16px;border:1px solid var(--border);border-radius:10px}
+table{border-collapse:collapse;width:100%;font-size:.875rem}
+th,td{padding:12px 16px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle}
+thead th{font-size:.75rem;font-weight:600;color:var(--muted);background:var(--surface);letter-spacing:.02em}
+tbody tr:last-child td,tbody tr:last-child th,tfoot tr:last-child th,tfoot tr:last-child td{border-bottom:0}
+tfoot th,tfoot td{background:var(--surface);font-variant-numeric:tabular-nums}
+th[scope=row]{font-weight:500}
+th.id{font-family:var(--mono);font-size:.8125rem;overflow-wrap:anywhere;min-width:11rem}
+.sev{font-weight:600;font-size:.8125rem}
+.sev.high{color:var(--fail)}.sev.medium{color:var(--warn)}.sev.low{color:var(--muted)}
+.finding{border:1px solid var(--border);border-radius:10px;padding:20px;margin-top:16px;break-inside:avoid;page-break-inside:avoid}
+.finding header{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:flex-start;justify-content:space-between}
+.finding .id{font:500 .8125rem var(--mono);color:var(--muted);margin-top:4px;overflow-wrap:anywhere}
+.chk{margin:16px 0 0;padding:16px 0 0;border-top:1px solid var(--border)}
+.chk dl,.method dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0;font-size:.875rem}
+.chk dt{color:var(--muted)}.chk dd{margin:0;min-width:0}
+pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:.8125rem/1.5 var(--mono);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px 12px}
+.fix{margin-top:8px;color:var(--muted);font-size:.875rem}.fix b{color:var(--text);font-weight:600}
+.method{font-size:.875rem;color:var(--muted);margin-top:56px;padding-top:24px;border-top:1px solid var(--border)}
+.method h2{margin-top:0;color:var(--text)}
+.method dl{gap:8px 16px;margin:16px 0}
+.method dt{color:var(--text);font-weight:600}.method dd{margin:0}
+.method p+p{margin-top:12px}
+ul.flaky{padding-left:20px;margin:12px 0 0}
+@media (max-width:600px){main{padding:32px 16px 48px}h1{font-size:1.75rem}.score{font-size:2.125rem}.chk dl,.method dl{grid-template-columns:1fr;gap:0}.chk dd,.method dd{margin-bottom:8px}}
+@media print{@page{size:A4;margin:16mm}:root{--bg:#fff;--surface:#fff;--border:#c8ccd2;--text:#000;--muted:#444;--pass:#1a7f4b;--fail:#c62828;--warn:#8a5200;--accent:#b53a08;--idle:#444;--pass-bg:#fff;--fail-bg:#fff;--warn-bg:#fff;--idle-bg:#fff}
+body{font-size:11pt}main{max-width:none;padding:0}.scroll{overflow:visible}h2,h3{break-after:avoid}.run,tr{break-inside:avoid}}
+`;
 
-/** One self-contained HTML page (inline CSS, no scripts, no external assets): heatmap, then failures with severity, detail and hint. */
+const ICON: Record<string, string> = {
+  PASS: '<path d="M3 8.5l3.2 3L13 4.5"/>',
+  FAIL: '<path d="M4 4l8 8M12 4l-8 8"/>',
+  ERROR: '<path d="M8 2.5l6 10.5H2z"/><path d="M8 7v2.8M8 11.6v.1"/>',
+  TIMEOUT: '<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/>',
+  NA: '<path d="M4 8h8"/>',
+};
+const LABEL: Record<string, string> = { PASS: "PASS", FAIL: "FAIL", ERROR: "ERROR", TIMEOUT: "TIMEOUT", NA: "not run" };
+/** Status pill: icon plus text, never colour alone. */
+const pill = (st: string, n?: number) => {
+  const k = st === "-" ? "NA" : st;
+  return `<span class="pill ${k}"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>${n === undefined ? "" : `<span class="num">${n}</span>`}${LABEL[k]}</span>`;
+};
+
+/** Runs named weak/weakened/mock are reference configurations, kept apart from the main verdict. */
+const isReference = (r: ConfigRun) => /weak|mock/i.test(r.name);
+const REF_TAG = ' <span class="tag">Reference</span>';
+const SEV_ORDER = { high: 3, medium: 2, low: 1 } as const;
+type Sev = keyof typeof SEV_ORDER;
+const worstOf = (sevs: Sev[]): Sev | undefined => sevs.sort((a, b) => SEV_ORDER[b] - SEV_ORDER[a])[0];
+/** Tripwire outcome from tripwire_hit assertions only: nothing is inferred when a run has none. */
+const tripwireText = (r: ConfigRun) => {
+  const t = r.results.flatMap((x) => x.results.filter((a) => a.assertion.type === "tripwire_hit"));
+  if (!t.length) return "";
+  const hit = t.filter((a) => !a.ok).length;
+  return `<p class="trip">Tripwire: <b>${hit ? `${hit} of ${t.length} checks hit` : `no hits in ${t.length} checks`}</b></p>`;
+};
+
+const runCard = (r: ConfigRun) => {
+  const s = summarize(r);
+  const { score, errors, timeouts } = scoreRun(r);
+  const ref = isReference(r);
+  return `<section class="run${ref ? " ref" : ""}"><h3>${escapeHtml(r.name)}${ref ? REF_TAG : ""}</h3><div class="score">${score ?? "n/a"}<small>score of 100</small></div>`
+    + `<ul class="counts">${[pill("PASS", s.passed), pill("FAIL", s.failed - s.timedOut - errors), pill("ERROR", errors), pill("TIMEOUT", timeouts)].map((p) => `<li>${p}</li>`).join("")}</ul>${tripwireText(r)}</section>`;
+};
+
+const finding = (x: ScenarioResult) => {
+  const body = x.error
+    ? `<div class="chk"><dl><dt>Error</dt><dd><pre>${escapeHtml(x.error)}</pre></dd></dl></div>`
+    : x.results.filter((a) => !a.ok).map((a) => {
+      const h = hintFor(a);
+      return `<div class="chk"><dl><dt>Check</dt><dd><code>${escapeHtml(a.kind)} ${escapeHtml(a.assertion.type)}</code></dd>`
+        + `<dt>Observed</dt><dd>${a.observed ? "yes" : "no"}</dd><dt>Severity</dt><dd><span class="sev ${severityOf(a)}">${severityOf(a)}</span></dd>`
+        + `<dt>Detail</dt><dd><pre>${escapeHtml(a.detail)}</pre></dd></dl>${h ? `<p class="fix"><b>How to fix:</b> ${escapeHtml(h)}</p>` : ""}</div>`;
+    }).join("");
+  return `<article class="finding"><header><div><h4>${escapeHtml(x.title)}</h4><div class="id">${escapeHtml(x.id)} &middot; class ${escapeHtml(x.class)}</div></div>${pill(status(x))}</header>${body}</article>`;
+};
+
+/** One self-contained HTML page (inline CSS, no scripts, no external assets): summary, results matrix, findings, method. */
 export function toHtml(runs: ConfigRun[]): string {
   const ids = [...new Set(runs.flatMap((r) => r.results.map((x) => x.id)))];
-  const head = `<tr><th>scenario</th>${runs.map((r) => `<th>${escapeHtml(r.name)}</th>`).join("")}</tr>`;
-  const rows = ids.map((id) => `<tr><td>${escapeHtml(id)}</td>${runs.map((r) => { const st = status(r.results.find((y) => y.id === id)); return `<td class="${st}">${st}</td>`; }).join("")}</tr>`);
-  const foot = `<tr><th>total</th>${runs.map((r) => { const s = summarize(r); return `<th>${s.passed}/${s.total}</th>`; }).join("")}</tr><tr><th>score</th>${runs.map((r) => `<th>${escapeHtml(scoreText(r))}</th>`).join("")}</tr>`;
-  const flakyHtml = flakyText(runs).length ? `<h2>Flaky</h2><ul>${flakyText(runs).map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "";
-  const fails = runs.map((r) => {
-    const items = r.results.filter((x) => !x.passed).map((x) => {
-      const detail = x.error ? [`<li>error: <pre>${escapeHtml(x.error)}</pre></li>`] : [];
-      for (const a of x.results.filter((y) => !y.ok)) {
-        const h = hintFor(a);
-        detail.push(`<li><span class="s-${severityOf(a)}">[${severityOf(a)}]</span> ${escapeHtml(a.kind)} ${escapeHtml(a.assertion.type)}: <pre>${escapeHtml(a.detail)}</pre>${h ? `<em>How to fix: ${escapeHtml(h)}</em>` : ""}</li>`);
-      }
-      return `<h3>${escapeHtml(x.id)} (${escapeHtml(x.class)}): ${escapeHtml(x.title)}</h3><ul>${detail.join("")}</ul>`;
-    });
-    return items.length ? `<h2>Failures: ${escapeHtml(r.name)}</h2>${items.join("")}` : "";
+  const main = runs.filter((r) => !isReference(r));
+  const refs = runs.filter(isReference);
+  const ordered = [...main, ...refs];
+  const cols = ordered.map((r) => `<th scope="col">${escapeHtml(r.name)}${isReference(r) ? REF_TAG : ""}</th>`).join("");
+  const head = `<tr><th scope="col">Scenario</th><th scope="col">Class</th><th scope="col">Severity</th>${cols}</tr>`;
+  const rows = ids.map((id) => {
+    const hits = runs.flatMap((r) => r.results.filter((y) => y.id === id));
+    // A timeout is not a violation, so it carries no severity here.
+    const sev = worstOf(hits.filter((x) => !isTimeout(x)).flatMap((x) => x.results.filter((a) => !a.ok).map(severityOf)));
+    return `<tr><th scope="row" class="id">${escapeHtml(id)}</th><td>${escapeHtml(hits[0]!.class)}</td><td>${sev ? `<span class="sev ${sev}">${sev}</span>` : "&ndash;"}</td>${ordered.map((r) => `<td>${pill(status(r.results.find((y) => y.id === id)))}</td>`).join("")}</tr>`;
   });
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Firedrill report</title><style>${CSS}</style></head><body><h1>Firedrill report</h1><table>${head}${rows.join("")}${foot}</table><p>Score: 100 x (1 - weight of scenarios with a violation / weight of scored scenarios); weight = worst severity (high 3, medium 2, low 1). Errors and timeouts are not scored.</p>${flakyHtml}${fails.join("")}</body></html>\n`;
+  const pad = "<td></td><td></td>";
+  const foot = `<tr><th scope="row">Passed</th>${pad}${ordered.map((r) => { const s = summarize(r); return `<td class="c">${s.passed}/${s.total}</td>`; }).join("")}</tr><tr><th scope="row">Score</th>${pad}${ordered.map((r) => `<td class="c">${escapeHtml(scoreText(r))}</td>`).join("")}</tr>`;
+  const fl = flakyText(runs);
+  const flakyHtml = fl.length ? `<h2>Flaky scenarios</h2><p class="lede">Pass/fail differed across repeats of the same run.</p><ul class="flaky">${fl.map((t) => `<li>${escapeHtml(t)}</li>`).join("")}</ul>` : "";
+  const fails = ordered.map((r) => {
+    const items = r.results.filter((x) => !x.passed).map(finding);
+    return items.length ? `<h3 style="margin-top:32px">${escapeHtml(r.name)}${isReference(r) ? REF_TAG : ""}</h3>${items.join("")}` : "";
+  }).filter(Boolean);
+  const findingsHtml = `<h2>Findings</h2>${fails.length ? `<p class="lede">One block per scenario that failed, errored or timed out, per run.</p>${fails.join("")}` : '<p class="lede">No scenario failed, errored or timed out.</p>'}`;
+  const group = (label: string, rs: ConfigRun[]) => rs.length ? `<p class="group">${label}</p><div class="runs">${rs.map(runCard).join("")}</div>` : "";
+  const defs: [string, string][] = [
+    ["PASS", "Every check held: no violation was observed and the workflow responded."],
+    ["FAIL", "At least one check failed: a violation was observed, or the workflow did not respond while something else was seen."],
+    ["ERROR", "The run itself failed. Never counted as a pass; left out of the score."],
+    ["TIMEOUT", "Only workflow_responded failed and nothing was observed: the wait ran out. Not a security finding; left out of the score."],
+  ];
+  const method = `<footer class="method"><h2>Method and limits</h2><p>Grading is deterministic: fixed assertions over what GitHub and the tripwire recorded. No model decides pass or fail.</p><dl>${defs.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`
+    + `<p>Score: 100 x (1 - weight of scenarios with a violation / weight of scored scenarios); weight = worst severity (high 3, medium 2, low 1). Errors and timeouts are not scored.</p>`
+    + `<p>This reports what one tested configuration did. It is not a statement about the product. Runs marked Reference (weakened, weak or mock) are shown apart and are not part of the main verdict.</p></footer>`;
+  const gen = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Firedrill report</title><style>${CSS}</style></head><body><main>`
+    + `<h1>Firedrill <span class="brand">report</span></h1><p class="sub">What one tested configuration did</p>`
+    + `<div class="meta"><span>Generated <b class="num">${gen}</b></span><span>Runs <b>${runs.map((r) => escapeHtml(r.name)).join(", ")}</b></span><span>Grading is deterministic</span></div>`
+    + `<h2>Executive summary</h2>${group("Tested configurations", main)}${group("Reference configurations (not part of the main verdict)", refs)}`
+    + `<h2>Results matrix</h2><div class="scroll" tabindex="0" role="region" aria-label="Results matrix"><table><thead>${head}</thead><tbody>${rows.join("")}</tbody><tfoot>${foot}</tfoot></table></div>`
+    + `${flakyHtml}${findingsHtml}${method}</main></body></html>\n`;
 }

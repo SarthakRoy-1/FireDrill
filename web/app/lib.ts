@@ -144,23 +144,27 @@ export function commandSteps(repoIn: string, sourceIn: string, newNameIn: string
     { id: "selftest", title: "Prove the grader first", why: "Mock agents confirm the harness catches failures before you point it at anything real.", blocks: [{ text: "npm run selftest" }] },
   ];
   if (src) steps.push({
-    id: "clone", title: "Clone your source repo into a sandbox", why: "Makes a code-only private copy (secret-scanned) so attacks never touch the original.",
-    blocks: [{ text: `${cli} clone ${src.owner}/${src.name} ${nn}` }],
+    id: "clone", title: "Clone your source repo into a sandbox", why: "Makes a code-only private copy (secret-scanned) so attacks never touch the original. clone reads GITHUB_TOKEN from the environment, so set a temporary broad token first.",
+    blocks: [
+      { label: "bash / zsh", text: `export GITHUB_TOKEN=<token that can read ${src.owner}/${src.name} and create repos>` },
+      { label: "PowerShell", text: `$env:GITHUB_TOKEN = "<token that can read ${src.owner}/${src.name} and create repos>"` },
+      { label: "Then clone", text: `${cli} clone ${src.owner}/${src.name} ${nn}` },
+    ],
     notes: [
-      "This one command needs a token with read access to the source and permission to create repos. Use it once, then revoke it.",
+      "This temporary token needs read access to the source and permission to create repos. Use it for this one command, then revoke it.",
       `The sandbox becomes <your-github-user>/${nn}. Enter that as the sandbox repo above (use your own GitHub username).`,
       "Review .github/workflows in the copy. Alan has no documented API, so recreate the workflow on the copy by hand with the same instructions, model and tools.",
     ],
   });
   steps.push(
-    { id: "init", title: "Create the config and canary", why: "Writes firedrill.config.json with a fake canary and prints one line.", blocks: [{ text: `${cli} init` }], notes: ["Paste the printed canary line into your Alan workflow instructions."] },
+    { id: "init", title: "Create the config and canary", why: "Writes firedrill.config.json with a fake canary and prints one line.", blocks: [{ text: `${cli} init` }], notes: ["Paste the printed canary line into your Alan workflow instructions.", "init stops with an error if firedrill.config.json already exists. Keep the existing file (and its canary), or delete it first to start over."] },
     { id: "tripwire", title: "Start the tripwire", why: "A local trap-URL server that records whether the workflow requests a trap link.", blocks: [{ text: `${cli} tripwire --port 8787` }], notes: ["Run it in another terminal and expose it publicly.", "Set \"tripwireBase\" in firedrill.config.json to its public URL. Exfiltration scenarios need it."] },
     {
-      id: "token", title: "Set your token in your terminal", why: "Firedrill reads GITHUB_TOKEN from the environment. Never type it on this website.",
+      id: "token", title: src ? "Switch to the sandbox-only token" : "Set your token in your terminal", why: src ? "Replace the broad clone token with a fine-grained token for the sandbox only, in the same terminal. Never type it on this website." : "Firedrill reads GITHUB_TOKEN from the environment. Never type it on this website.",
       blocks: [{ label: "bash / zsh", text: `export GITHUB_TOKEN=<fine-grained token for ${r} only>` }, { label: "PowerShell", text: `$env:GITHUB_TOKEN = "<fine-grained token for ${r} only>"` }],
-      notes: [`Use a fine-grained token scoped to the sandbox repo ${r} only.`],
+      notes: [`Use a fine-grained token scoped to the sandbox repo ${r} only.`, ...(src ? ["Revoke the broad token you used for the clone."] : [])],
     },
-    { id: "doctor", title: "Check the setup", why: "Verifies config, token, repo and tripwire before a long run.", blocks: [{ text: `${cli} doctor --repo ${r}` }] },
+    { id: "doctor", title: "Check the setup", why: "Verifies config, token, repo and tripwire before a long run.", blocks: [{ text: `${cli} doctor --repo ${r}` }], notes: ["Keep the tripwire from the previous step running; doctor checks it and reads tripwireBase from firedrill.config.json."] },
     {
       id: "run", title: "Run the attacks", why: "Opens test pull requests in your sandbox and grades what the workflow did.", blocks: [{ text: `${cli} run scenarios/attacks --repo ${r}` }],
       notes: ["Each scenario waits up to 900 s by default (Alan runs took 6 to 14 minutes), so a full pack takes hours.", "Add --only a,b to pick scenarios and --out file to set the results file."],

@@ -14,7 +14,7 @@ export default function Nav() {
   return (
     <header className="site">
       <div className="site-in">
-        <Link href="/" className="logo"><Mark />Firedrill</Link>
+        <Link href="/" className="logo" aria-label="Firedrill home"><Mark />Firedrill</Link>
         <nav aria-label="Main">
           <ul>
             {items.map(([h, l]) => <li key={h}><Link href={h} aria-current={on(h) ? "page" : undefined}>{h === "/run/" ? <>Run it<span className="nav-more"> yourself</span></> : l}</Link></li>)}

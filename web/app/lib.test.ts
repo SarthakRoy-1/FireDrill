@@ -73,7 +73,7 @@ test("scenarioIndex lists each id once across all runs, sorted; statusIn is null
   assert.ok(CLASS_BLURB["exfiltration"]);
 });
 
-import { parseRepoRef, repoError, commandSteps, defaultSandboxName } from "./lib";
+import { parseRepoRef, repoError, nameError, commandSteps, defaultSandboxName } from "./lib";
 const cmds = (a: string, b = "", c = "") => commandSteps(a, b, c).flatMap((s) => s.blocks.map((x) => x.text)).join("\n");
 
 test("repo reference validation", () => {
@@ -104,4 +104,43 @@ test("no step contains a token value or token=", () => {
   const all = JSON.stringify(commandSteps("a/b", "org/app", ""));
   assert.doesNotMatch(all, /token=/);
   assert.doesNotMatch(all, /gh[pous]_|github_pat_/);
+});
+
+test("clone step sets a broad token before the clone command; sandbox token step comes later", () => {
+  const steps = commandSteps("me/sb", "org/app", "");
+  const clone = steps.find((x) => x.id === "clone")!;
+  const texts = clone.blocks.map((b) => b.text);
+  const iTok = texts.findIndex((t) => /GITHUB_TOKEN/.test(t));
+  const iClone = texts.findIndex((t) => /cli\.ts clone /.test(t));
+  assert.ok(iTok >= 0 && iClone > iTok);
+  assert.ok(texts.some((t) => t.startsWith("export GITHUB_TOKEN=")) && texts.some((t) => t.startsWith("$env:GITHUB_TOKEN = ")));
+  assert.ok(clone.notes!.some((n) => /revoke/i.test(n)));
+  const ids = steps.map((x) => x.id);
+  assert.ok(ids.indexOf("clone") < ids.indexOf("token") && ids.indexOf("token") < ids.indexOf("doctor"));
+  const tok = steps.find((x) => x.id === "token")!;
+  assert.match(tok.title, /sandbox-only/);
+  assert.ok(tok.notes!.some((n) => /Revoke/.test(n)));
+  assert.ok(!commandSteps("me/sb", "", "").find((x) => x.id === "token")!.notes!.some((n) => /Revoke/.test(n)));
+});
+
+test("input edge cases: trimmed consistently, hostile values never reach a command", () => {
+  assert.deepEqual(parseRepoRef("  a/b  "), { owner: "a", name: "b" });
+  assert.equal(repoError("  a/b  "), null);
+  assert.match(cmds("  a/b  "), /--repo a\/b$/m);
+  for (const bad of ["nope", "-x/y", "a/..", "a b/c", "a/b/c", "x/y;rm -rf ~", "a/b\nrm", "$(x)/y", "a/b`x`"]) {
+    assert.ok(repoError(bad), bad);
+    const t = cmds(bad, bad, bad);
+    assert.doesNotMatch(t, /rm -rf|\$\(|`|\.\.|a b|nope/, bad);
+    assert.ok(!commandSteps(bad, bad, bad).some((x) => x.id === "clone"));
+  }
+  assert.equal(nameError(""), null);
+  assert.ok(nameError("a/b") && nameError("..") && nameError("x y"));
+  assert.match(cmds("a/b", "org/app", "bad name;x"), /clone org\/app app-sandbox/);
+  assert.match(cmds("a/b", "org/app", "  mine  "), /clone org\/app mine/);
+});
+
+test("init note, doctor note and no token-looking strings with a clone source", () => {
+  const all = JSON.stringify(commandSteps("a/b", "org/app", "x"));
+  assert.match(all, /already exists/);
+  assert.doesNotMatch(all, /gh[pousr]_[A-Za-z0-9]|github_pat_|Bearer /);
 });

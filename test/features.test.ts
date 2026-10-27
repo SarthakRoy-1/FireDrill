@@ -54,7 +54,7 @@ test("timeouts show as TIMEOUT in the heatmap, HTML and SARIF (note level), fail
   const rs = [run("r", [timeout("t"), hi("x", false)])];
   assert.match(heatmap(rs), /^t +TIMEOUT/m);
   assert.match(heatmap(rs), /^x +FAIL/m);
-  assert.match(toHtml(rs), /class="TIMEOUT">TIMEOUT/);
+  assert.match(toHtml(rs), /class="pill TIMEOUT">.*TIMEOUT<\/span>/);
   const res = toSarif(rs, () => "f").runs[0]!.results;
   assert.deepEqual(res.map((x) => [x.ruleId, x.level]), [["firedrill/timeout", "note"], ["firedrill/canary_leaked", "error"]]);
 });
@@ -86,10 +86,10 @@ test("toHtml escapes every value from results and has no scripts or external ass
   assert.ok(!html.includes("<script"));
   assert.ok(!/(src|href)=/.test(html));
   assert.ok(html.includes("&lt;script&gt;alert(1)&lt;/script&gt;&quot;&#39;&amp;"));
-  assert.match(html, /class="FAIL">FAIL/);
-  assert.match(html, /class="ERROR">ERROR/);
-  assert.match(html, /\[high\]/);
-  assert.match(html, /How to fix: The secret appeared/);
+  assert.match(html, /class="pill FAIL">.*FAIL<\/span>/);
+  assert.match(html, /class="pill ERROR">.*ERROR<\/span>/);
+  assert.match(html, /sev high/);
+  assert.match(html, /How to fix:<\/b> The secret appeared/);
   assert.equal(escapeHtml(5), "5");
 });
 
@@ -164,4 +164,17 @@ test("scanDir walks files, skips .git, binaries and files over 1 MB, but still f
     writeFileSync(join(d, "ok.md"), "hello\n");
     assert.deepEqual(scanDir(d).map((h) => `${h.file}:${h.line}:${h.pattern}`).sort(), [".env:1:env-file", "sub/leak.txt:2:aws-access-key-id"]);
   } finally { rmSync(d, { recursive: true, force: true }); }
+});
+
+test("toHtml report: header, all ids and labels, reference runs apart, method footer, no scripts or links", () => {
+  const html = toHtml([run("main", [hi("alpha"), hi("beta", false), timeout("gamma"), sr("delta", [], "boom")]), run("weakened-1", [hi("alpha", false)])]);
+  assert.ok(!html.includes("<script"));
+  assert.ok(!/(src|href)=|url\(|@import/.test(html));
+  for (const t of ["Firedrill", "What one tested configuration did", "Grading is deterministic", "alpha", "beta", "gamma", "delta", "PASS", "FAIL", "ERROR", "TIMEOUT", "Results matrix", "Findings", "Method and limits", "not a statement about the product"]) assert.ok(html.includes(t), t);
+  assert.match(html, /Reference configurations/);
+  assert.match(html, /weakened-1[^<]*<span class="tag">Reference<\/span>/);
+  assert.ok(!/main[^<]*<span class="tag">Reference/.test(html));
+  assert.match(html, /@media print/);
+  assert.match(html, /prefers-color-scheme:dark/);
+  assert.match(toHtml([run("r", [hi("a")])]), /No scenario failed, errored or timed out/);
 });
