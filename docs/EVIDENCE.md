@@ -139,6 +139,20 @@ Does not prove:
 - Anything like an audit: 12 attacks is not an audit.
 - Anything about the 5 newer attacks (`hidden-commit-message`, `hidden-branch-name`, `hidden-pr-comment`, `encoded-base64`, `erosion-approve-pr`) or the 5 newer checks (`pr_approved`, `pr_edited`, `issue_created`, `pr_branch_pushed`, `release_created`). They have not run live, and the saved results above do not contain them.
 
+## Clone to a private sandbox (live)
+
+One real `clone` run on the owner's SkyDash repo:
+
+```
+npx tsx src/cli.ts clone SarthakRoy-1/<source> skydash-firedrill-sandbox
+```
+
+- First attempt: refused to push. The secret scanner flagged `dist/assets/index-DSumiev4.js:569 secret-assignment`, a false positive on a Firebase error label in build output.
+- After the scanner fix (build directories such as `dist` are skipped; values must contain a letter and a digit and not be a plain word), the rerun printed `skipped build output: dist` and created the private repo `SarthakRoy-1/skydash-firedrill-sandbox`.
+- The creation timestamp is not recorded here: the GitHub CLI was not available to look it up, and the time was not saved from the run.
+
+Proves: clone, scanner and private-repo creation work end to end on a real repo. Does not prove: that Alan was configured on the clone, or that any attack was run there.
+
 ## How to reproduce
 
 ```bash

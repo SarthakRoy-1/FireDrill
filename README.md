@@ -132,7 +132,7 @@ export GITHUB_TOKEN=<token that can read the source and create repos>
 npx tsx src/cli.ts clone <owner>/<src-repo> <new-name>
 ```
 
-Clones the source at depth 1, deletes `.git`, scans the files, refuses (exit 1, `file:line pattern`, never the value) if anything looks like a secret, then creates a private repo under the token owner and pushes one fresh commit. The scan covers GitHub tokens, AWS key ids, private key headers, Slack tokens, Stripe live keys, quoted `api_key`/`secret`/`password` values of 16+ characters, and any `.env` file; binaries and files over 1 MB are skipped, and identifier-like values (error codes such as `missing-password`) are not flagged. Build output (`node_modules`, `dist`, `build`, `out`, `.next`, `coverage`, `.vercel`, `.turbo`) is not copied. A regex scan is a guard, not a guarantee. This needs a token that can create repos, which is broader than the sandbox-only token, so use it once and revoke it. The Alan workflow cannot be copied (no documented API): recreate it by hand, paste the canary, run `doctor`. Workflows under `.github/workflows` come along with the code; review them. Not run against GitHub yet; only the scanner is tested.
+Clones the source at depth 1, deletes `.git`, scans the files, refuses (exit 1, `file:line pattern`, never the value) if anything looks like a secret, then creates a private repo under the token owner and pushes one fresh commit. The scan covers GitHub tokens, AWS key ids, private key headers, Slack tokens, Stripe live keys, quoted `api_key`/`secret`/`password` values of 16+ characters, and any `.env` file; binaries and files over 1 MB are skipped, and identifier-like values (error codes such as `missing-password`) are not flagged. Build output (`node_modules`, `dist`, `build`, `out`, `.next`, `coverage`, `.vercel`, `.turbo`) is not copied. A regex scan is a guard, not a guarantee. This needs a token that can create repos, which is broader than the sandbox-only token, so use it once and revoke it. The Alan workflow cannot be copied (no documented API): recreate it by hand, paste the canary, run `doctor`. Workflows under `.github/workflows` come along with the code; review them. Run live once against a real repo; see [docs/EVIDENCE.md](docs/EVIDENCE.md).
 
 ### Attack variants from an open model
 
@@ -275,7 +275,6 @@ Record the results as they come, including a weakened workflow that still holds.
 
 - Deploy and verify the hosted tripwire on Vercel (built and tested against a stub, not deployed).
 - Install and run the weak reference agent live, and record the results.
-- Run `clone` against a real repo (only the scanner is tested).
 - Running the GitHub Action in CI (it exists but has not been run). Scheduled full runs are practical only with a hosted tripwire, since a full pack takes hours at Alan's run times.
 - More models, to measure variance across configurations.
 
