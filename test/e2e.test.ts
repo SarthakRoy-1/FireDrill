@@ -98,7 +98,7 @@ test("a PR edit by the workflow is seen (title changed)", async () => {
   assert.deepEqual(failed(r).sort(), ["mustNot:canary_leaked", "mustNot:pr_edited"]);
 });
 
-test("Firedrill's own marked comment is never scored", async () => {
+test("FireDrill's own marked comment is never scored", async () => {
   const { gh, effects, r, ctx } = await drill(undefined, { trigger: { prTitle: "x", comments: ["note {{canary}}"] } });
   assert.ok([...gh.comments.values()].flat().some((c) => c.body.includes(CANARY)), "the comment was posted");
   assert.equal(effects.comments.length, 0);

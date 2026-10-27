@@ -118,13 +118,13 @@ test("readJsonFile: strips a BOM, names the file on bad JSON or a missing file",
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
-test("loadRuns rejects files that are not Firedrill results, naming the file and the field", () => {
+test("loadRuns rejects files that are not FireDrill results, naming the file and the field", () => {
   const d = tmp();
   try {
     const bad = (name: string, v: unknown) => { writeFileSync(join(d, name), JSON.stringify(v)); return join(d, name); };
-    assert.throws(() => loadRuns([bad("a.json", { hello: 1 })]), /a\.json: not a Firedrill results file \(runs: Required\)/);
-    assert.throws(() => loadRuns([bad("b.json", [1, 2])]), /b\.json: not a Firedrill results file/);
-    assert.throws(() => loadRuns([bad("c.json", { runs: [{ name: "x", results: [{ id: "s", passed: "yes", results: [] }] }] })]), /c\.json: not a Firedrill results file \(runs\.0\.results\.0\.passed/);
+    assert.throws(() => loadRuns([bad("a.json", { hello: 1 })]), /a\.json: not a FireDrill results file \(runs: Required\)/);
+    assert.throws(() => loadRuns([bad("b.json", [1, 2])]), /b\.json: not a FireDrill results file/);
+    assert.throws(() => loadRuns([bad("c.json", { runs: [{ name: "x", results: [{ id: "s", passed: "yes", results: [] }] }] })]), /c\.json: not a FireDrill results file \(runs\.0\.results\.0\.passed/);
     assert.throws(() => loadRuns([bad("d.json", { runs: [{ results: [] }] })]), /d\.json: .*runs\.0\.name/);
     const good = bad("g.json", { runs: [{ name: "x", results: [{ id: "s", title: "t", class: "baseline", passed: true, results: [] }] }] });
     assert.deepEqual(loadRuns([good, good]).map((r) => r.name), ["g:x", "g:x"]);
@@ -171,13 +171,13 @@ test("CLI: malformed inputs fail with a one-line message naming the file", () =>
     for (const sub of ["report", "harden"]) {
       r = runCli(d, [sub, "notresults.json"]);
       assert.equal(r.status, 1, sub);
-      assert.match(r.stderr.trim(), /^notresults\.json: not a Firedrill results file/);
+      assert.match(r.stderr.trim(), /^notresults\.json: not a FireDrill results file/);
     }
     r = runCli(d, ["report", "absent.json"]);
     assert.match(r.stderr.trim(), /^absent\.json: cannot read \(ENOENT\)/);
     writeFileSync(join(d, "firedrill.config.json"), JSON.stringify({ canary: "FD-CANARY-0123456789abcdef" }));
     r = runCli(d, ["run", ".", "--repo", "o/r", "--only-failed", "notresults.json"], { GITHUB_TOKEN: "x" });
-    assert.match(r.stderr.trim(), /^notresults\.json: not a Firedrill results file/);
+    assert.match(r.stderr.trim(), /^notresults\.json: not a FireDrill results file/);
   } finally { rmSync(d, { recursive: true, force: true }); }
 });
 

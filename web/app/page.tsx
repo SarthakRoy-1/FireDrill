@@ -18,7 +18,7 @@ export default function Overview() {
   return (
     <>
       <section className="hero">
-        <h1>Firedrill results</h1>
+        <h1>FireDrill results</h1>
         <p className="lede">An open-source test runner that attacks an Alan workflow with prompt-injection scenarios, then grades what it did with deterministic checks on GitHub and a tripwire. This site shows what <strong>one tested configuration</strong> did, nothing more.</p>
         {runs.length > 0 && (
           <ul className="chips" aria-label="Run metadata">

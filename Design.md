@@ -1,10 +1,10 @@
-# Design: Firedrill results page
+# Design: FireDrill results page
 
 The only UI is one static results page (heatmap + tripwire counter) and the CLI grid. Keep it plain and fast. These are proposed defaults; change them freely.
 
 ## 1. Brand identity
 
-- Name: Firedrill. Tagline: "Run the drill before production does."
+- Name: FireDrill. Tagline: "Run the drill before production does."
 - Tone: calm, technical, evidence-first. Alarm only where something actually failed.
 - Signature element: the tripwire counter. Stays at 0 when the guardrail holds, ticks up (in red) when it does not.
 - No mascot, no illustrations. Honest numbers over decoration.

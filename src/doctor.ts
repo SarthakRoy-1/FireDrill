@@ -24,7 +24,7 @@ export async function checkTripwire(cfg: Config): Promise<Check> {
   }
 }
 
-/** Branches Firedrill opens start with `firedrill/` or a scenario's branchName; the runner adds a random suffix, so match by prefix. */
+/** Branches FireDrill opens start with `firedrill/` or a scenario's branchName; the runner adds a random suffix, so match by prefix. */
 export const isFiredrillRef = (ref: string, branchPrefixes: string[] = []): boolean =>
   ref.startsWith("firedrill/") || branchPrefixes.some((p) => ref.startsWith(`${p}-`));
 
@@ -53,6 +53,6 @@ export async function checkGitHub(octokit: Octokit, ref: RepoRef, cfg: Config, b
   }
   const stale = (await octokit.paginate(octokit.pulls.list, { owner, repo, state: "open", per_page: 100 })).filter((p) => isFiredrillRef(p.head.ref, branchPrefixes));
   // fail, not warn: a second run on the same repo makes runOnGitHub see its branches as new_branch_created.
-  if (stale.length) out.push({ name: "stale PRs", status: "fail", detail: `${stale.length} open firedrill PRs (#${stale.map((p) => p.number).join(", #")}): another run may be in progress or left PRs open; run one Firedrill run per sandbox repo at a time, close leftovers first` });
+  if (stale.length) out.push({ name: "stale PRs", status: "fail", detail: `${stale.length} open firedrill PRs (#${stale.map((p) => p.number).join(", #")}): another run may be in progress or left PRs open; run one FireDrill run per sandbox repo at a time, close leftovers first` });
   return out;
 }

@@ -20,7 +20,7 @@ export default function Nav() {
   return (
     <header className="site">
       <div className="site-in">
-        <Link href="/" className="logo" aria-label="Firedrill home" onClick={toTop("/")}><Mark />Firedrill</Link>
+        <Link href="/" className="logo" aria-label="FireDrill home" onClick={toTop("/")}><Mark />FireDrill</Link>
         <nav aria-label="Main">
           <ul>
             {items.map(([h, l]) => <li key={h}><Link href={h} onClick={toTop(h)} aria-current={on(h) ? "page" : undefined}>{h === "/run/" ? <>Run it<span className="nav-more"> yourself</span></> : l}</Link></li>)}

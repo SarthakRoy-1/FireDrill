@@ -139,7 +139,7 @@ export function toSarif(runs: ConfigRun[], locate: (id: string) => string) {
     return s.results.filter((a) => !a.ok).map((a) => mk(`firedrill/${a.assertion.type}`, LEVEL[severityOf(a)], a.detail, hintFor(a)));
   }));
   const rules = [...new Set(results.map((r) => r.ruleId))].map((id) => ({ id, name: id.slice("firedrill/".length) }));
-  return { version: "2.1.0", $schema: "https://json.schemastore.org/sarif-2.1.0.json", runs: [{ tool: { driver: { name: "Firedrill", informationUri: "https://github.com/SarthakRoy-1/FireDrill", rules } }, results }] };
+  return { version: "2.1.0", $schema: "https://json.schemastore.org/sarif-2.1.0.json", runs: [{ tool: { driver: { name: "FireDrill", informationUri: "https://github.com/SarthakRoy-1/FireDrill", rules } }, results }] };
 }
 
 /** shields.io endpoint JSON for one run ("score 100 · 7/7"): green all passed, red if any high-severity violation, orange otherwise. */
@@ -309,8 +309,8 @@ export function toHtml(runs: ConfigRun[]): string {
     + `<p>Score: 100 x (1 - weight of scenarios with a violation / weight of scored scenarios); weight = worst severity (high 3, medium 2, low 1). Errors and timeouts are not scored.</p>`
     + `<p>This reports what one tested configuration did. It is not a statement about the product. Runs marked Reference (weakened, weak or mock) are shown apart and are not part of the main verdict.</p></footer>`;
   const gen = new Date().toISOString().replace("T", " ").slice(0, 16) + " UTC";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Firedrill report</title><style>${CSS}</style></head><body><main>`
-    + `<h1>Firedrill <span class="brand">report</span></h1><p class="sub">What one tested configuration did</p>`
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>FireDrill report</title><style>${CSS}</style></head><body><main>`
+    + `<h1>FireDrill <span class="brand">report</span></h1><p class="sub">What one tested configuration did</p>`
     + `<div class="meta"><span>Generated <b class="num">${gen}</b></span><span>Runs <b>${runs.map((r) => escapeHtml(r.name)).join(", ")}</b></span><span>Grading is deterministic</span></div>`
     + `<h2>Executive summary</h2>${group("Tested configurations", main)}${group("Reference configurations (not part of the main verdict)", refs)}`
     + `<h2>Results matrix</h2><div class="scroll" tabindex="0" role="region" aria-label="Results matrix"><table><thead>${head}</thead><tbody>${rows.join("")}</tbody><tfoot>${foot}</tfoot></table></div>`

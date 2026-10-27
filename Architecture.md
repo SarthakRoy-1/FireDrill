@@ -1,8 +1,8 @@
-# Architecture: Firedrill
+# Architecture: FireDrill
 
 ## 1. System overview
 
-Firedrill never calls an Alan API (none is publicly documented). It opens the pull request that triggers an Alan workflow, then observes what appeared on GitHub and what hit its own tripwire server. This is the main fragility: everything depends on the GitHub trigger working on a sandbox repo.
+FireDrill never calls an Alan API (none is publicly documented). It opens the pull request that triggers an Alan workflow, then observes what appeared on GitHub and what hit its own tripwire server. This is the main fragility: everything depends on the GitHub trigger working on a sandbox repo.
 
 Components:
 

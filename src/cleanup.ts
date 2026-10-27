@@ -5,7 +5,7 @@ import type { RepoRef } from "./github.ts";
 export interface Leftover { number: number; ref: string }
 
 /**
- * Open PRs in this repo whose head branch looks like Firedrill's (`firedrill/` or a scenario branchName prefix).
+ * Open PRs in this repo whose head branch looks like FireDrill's (`firedrill/` or a scenario branchName prefix).
  * With yes=false nothing is changed. With yes=true each PR is closed and its branch deleted. GitHub cannot delete PRs.
  */
 export async function cleanup(octokit: Octokit, ref: RepoRef, prefixes: string[], yes: boolean, log: (m: string) => void = () => {}): Promise<Leftover[]> {

@@ -140,7 +140,7 @@ export function commandSteps(repoIn: string, sourceIn: string, newNameIn: string
   const nn = newNameIn.trim() && validName(newNameIn.trim()) ? newNameIn.trim() : src ? defaultSandboxName(sourceIn) : "<new-name>";
   const cli = "npx tsx src/cli.ts";
   const steps: CmdStep[] = [
-    { id: "get", title: "Get Firedrill", why: "Clone the open-source runner and install its dependencies.", blocks: [{ text: "git clone https://github.com/SarthakRoy-1/FireDrill.git\ncd FireDrill\nnpm install" }] },
+    { id: "get", title: "Get FireDrill", why: "Clone the open-source runner and install its dependencies.", blocks: [{ text: "git clone https://github.com/SarthakRoy-1/FireDrill.git\ncd FireDrill\nnpm install" }] },
     { id: "selftest", title: "Prove the grader first", why: "Mock agents confirm the harness catches failures before you point it at anything real.", blocks: [{ text: "npm run selftest" }] },
   ];
   if (src) steps.push({
@@ -159,7 +159,7 @@ export function commandSteps(repoIn: string, sourceIn: string, newNameIn: string
   steps.push(
     { id: "init", title: "Create the config and canary", why: "Writes firedrill.config.json with a fake canary and prints one line.", blocks: [{ text: `${cli} init` }], notes: ["Paste the printed canary line into your Alan workflow instructions.", "init stops with an error if firedrill.config.json already exists. Keep the existing file (and its canary), or delete it first to start over."] },
     {
-      id: "alan", title: "Set up your Alan automation", why: "Done by hand in Alan's web app: Alan has no documented API, so Firedrill cannot create or check it. It only sees what the automation does on GitHub.",
+      id: "alan", title: "Set up your Alan automation", why: "Done by hand in Alan's web app: Alan has no documented API, so FireDrill cannot create or check it. It only sees what the automation does on GitHub.",
       blocks: [],
       notes: [
         "Needs an Alan plan that includes automations (Free does not) and a team cloud environment.",
@@ -172,7 +172,7 @@ export function commandSteps(repoIn: string, sourceIn: string, newNameIn: string
     },
     { id: "tripwire", title: "Start the tripwire", why: "A local trap-URL server that records whether the workflow requests a trap link.", blocks: [{ label: "Terminal 1", text: `${cli} tripwire --port 8787` }, { label: "Terminal 2: public URL", text: "cloudflared tunnel --url http://localhost:8787" }], notes: ["The workflow's sandbox must reach the trap URL, so localhost alone is not enough. The live runs used this Cloudflare quick tunnel; it prints an https://<random>.trycloudflare.com address.", "Set \"tripwireBase\" in firedrill.config.json to that URL. Exfiltration scenarios need it. A quick tunnel gets a new URL on every restart, so update the config and rerun doctor after a restart."] },
     {
-      id: "token", title: src ? "Switch to the sandbox-only token" : "Set your token in your terminal", why: src ? "Replace the broad clone token with a fine-grained token for the sandbox only, in the same terminal. Never type it on this website." : "Firedrill reads GITHUB_TOKEN from the environment. Never type it on this website.",
+      id: "token", title: src ? "Switch to the sandbox-only token" : "Set your token in your terminal", why: src ? "Replace the broad clone token with a fine-grained token for the sandbox only, in the same terminal. Never type it on this website." : "FireDrill reads GITHUB_TOKEN from the environment. Never type it on this website.",
       blocks: [{ label: "bash / zsh", text: `export GITHUB_TOKEN=<fine-grained token for ${r} only>` }, { label: "PowerShell", text: `$env:GITHUB_TOKEN = "<fine-grained token for ${r} only>"` }],
       notes: [`Use a fine-grained token scoped to the sandbox repo ${r} only, with Contents and Pull requests set to Read and write (doctor checks write access). If a run reports a 403 while listing issues, also give Issues: Read.`, ...(src ? ["Revoke the broad token you used for the clone."] : [])],
     },
@@ -182,7 +182,7 @@ export function commandSteps(repoIn: string, sourceIn: string, newNameIn: string
       notes: ["Each scenario waits up to 900 s by default (Alan runs took 6 to 14 minutes), so a full pack takes hours.", "Add --only a,b to pick scenarios and --out file to set the results file."],
     },
     { id: "report", title: "Read the report", why: "Prints the saved run, with a score and a row per scenario.", blocks: [{ text: `${cli} report results.json` }] },
-    { id: "cleanup", title: "Clean up afterwards", why: "Lists open Firedrill PRs in the sandbox.", blocks: [{ text: `${cli} cleanup --repo ${r}` }], notes: ["Add --yes to close them and delete their branches."] },
+    { id: "cleanup", title: "Clean up afterwards", why: "Lists open FireDrill PRs in the sandbox.", blocks: [{ text: `${cli} cleanup --repo ${r}` }], notes: ["Add --yes to close them and delete their branches."] },
   );
   return steps;
 }

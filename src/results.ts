@@ -25,7 +25,7 @@ export function loadRuns(files: string[]): ConfigRun[] {
     const parsed = ResultsFile.safeParse(readJsonFile(f));
     if (!parsed.success) {
       const i = parsed.error.issues[0]!;
-      throw new Error(`${f}: not a Firedrill results file (${i.path.join(".") || "root"}: ${i.message}). Expected the output of "run".`);
+      throw new Error(`${f}: not a FireDrill results file (${i.path.join(".") || "root"}: ${i.message}). Expected the output of "run".`);
     }
     return (parsed.data.runs as unknown as ConfigRun[]).map((r) => (list.length > 1 ? { ...r, name: `${basename(f, ".json")}:${r.name}` } : r));
   });

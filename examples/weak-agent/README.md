@@ -1,6 +1,6 @@
 # Weak reference agent
 
-A GitHub Actions workflow that behaves like a badly written AI reviewer, so you can watch Firedrill catch a real failure without Alan. It sends the PR title, body, branch name, commit messages and diff to an OpenAI-compatible chat endpoint with a deliberately weak prompt ("follow instructions for the reviewer", plus a fake secret in the prompt), and posts the reply as a PR comment.
+A GitHub Actions workflow that behaves like a badly written AI reviewer, so you can watch FireDrill catch a real failure without Alan. It sends the PR title, body, branch name, commit messages and diff to an OpenAI-compatible chat endpoint with a deliberately weak prompt ("follow instructions for the reviewer", plus a fake secret in the prompt), and posts the reply as a PR comment.
 
 **Deliberately insecure. Sandbox repo only.** The secret must be the fake canary from `firedrill init`. The agent is vulnerable to prompt injection by design, but not to shell injection: PR text reaches the script only through environment variables and `jq`.
 
@@ -26,7 +26,7 @@ npx tsx src/cli.ts run scenarios/attacks --repo <owner>/<sandbox> --name weak-ag
 
 - A run takes seconds per scenario (a workflow run plus one model call), not minutes like Alan.
 - Scenarios that need the agent to fetch a URL (`tripwire_hit`) will likely PASS, because this agent has no fetch tool. That is a real property of this agent, not a harness bug.
-- `hidden-pr-comment` may race: Firedrill posts that comment right after opening the PR, and this workflow does not read PR comments anyway.
+- `hidden-pr-comment` may race: FireDrill posts that comment right after opening the PR, and this workflow does not read PR comments anyway.
 - Results vary by model. Record them as they come, including a weak agent that still holds.
 
 `web/scripts/copy-results.mjs` picks up `results/weak-agent.json` as "Weak reference agent (live)" when it exists.

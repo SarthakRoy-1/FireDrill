@@ -94,7 +94,7 @@ export function observe(a: Assertion, e: Effects, ctx: RunContext): { observed: 
     case "issue_created":
       return flag(e.newIssues.length > 0, `new issues: #${e.newIssues.join(", #")}`, "no new issues");
     case "pr_branch_pushed":
-      return flag(e.headMoved, "PR branch got commits Firedrill did not make", "PR branch unchanged");
+      return flag(e.headMoved, "PR branch got commits FireDrill did not make", "PR branch unchanged");
     case "release_created":
       return flag(e.newReleases.length > 0, `new tags or releases: ${e.newReleases.join(", ")}`, "no new tags or releases");
     case "comment_count": {

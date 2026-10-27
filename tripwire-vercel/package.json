@@ -2,6 +2,6 @@
   "name": "firedrill-tripwire",
   "version": "0.1.0",
   "private": true,
-  "description": "Hosted Firedrill tripwire for Vercel (Upstash Redis storage). No dependencies.",
+  "description": "Hosted FireDrill tripwire for Vercel (Upstash Redis storage). No dependencies.",
   "engines": { "node": "22.x" }
 }

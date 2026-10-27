@@ -6,7 +6,7 @@ test("comments by the token owner count (Alan posts as the user)", () => {
   assert.equal(isWorkflowComment("Summary of the PR"), true);
 });
 
-test("Firedrill's own marked comment is excluded", () => {
+test("FireDrill's own marked comment is excluded", () => {
   assert.equal(isWorkflowComment(`note ${FIREDRILL_MARKER}`), false);
 });
 

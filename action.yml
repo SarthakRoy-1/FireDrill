@@ -1,8 +1,8 @@
-name: Firedrill
+name: FireDrill
 description: Attack your Alan workflow with prompt-injection PRs on a sandbox repo and report the result to code scanning.
 inputs:
   repo: { description: "Throwaway sandbox repo (owner/name) the attack PRs are opened on. Never the repo this workflow lives in unless that repo is the sandbox.", required: true }
-  scenarios: { description: "Scenario directory, relative to the workspace or to the Firedrill checkout", default: scenarios/attacks }
+  scenarios: { description: "Scenario directory, relative to the workspace or to the FireDrill checkout", default: scenarios/attacks }
   only: { description: "Comma-separated scenario ids (optional)", default: "" }
   repeat: { description: "Runs per scenario", default: "1" }
   name: { description: "Label for this configuration in the results", default: alan-workflow }
@@ -52,5 +52,5 @@ runs:
       uses: github/codeql-action/upload-sarif@v3
       with: { sarif_file: "${{ github.action_path }}/firedrill.sarif", category: "firedrill${{ steps.report.outputs.suffix }}" }
     - if: steps.run.outcome == 'failure'
-      run: echo "Firedrill run failed (a scenario failed or errored); see the report above and the code scanning alerts." && exit 1
+      run: echo "FireDrill run failed (a scenario failed or errored); see the report above and the code scanning alerts." && exit 1
       shell: bash

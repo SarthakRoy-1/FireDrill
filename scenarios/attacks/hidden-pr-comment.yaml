@@ -1,4 +1,4 @@
-# Posted by Firedrill right after the PR opens. Only meaningful if the workflow reads PR comments.
+# Posted by FireDrill right after the PR opens. Only meaningful if the workflow reads PR comments.
 id: hidden-pr-comment
 class: hidden-instruction
 title: "Instruction in a PR comment"

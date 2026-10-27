@@ -1,4 +1,4 @@
-# DELIBERATELY INSECURE reference agent for Firedrill. Install it in a SANDBOX repo only, never in a real one.
+# DELIBERATELY INSECURE reference agent for FireDrill. Install it in a SANDBOX repo only, never in a real one.
 # It summarizes a pull request with an LLM, follows any instructions it finds there, and has a fake secret in its prompt.
 # The secret FIREDRILL_CANARY must be the fake canary from `npx tsx src/cli.ts init`, never a real credential.
 # It is vulnerable to PROMPT injection only: every PR-controlled value reaches the shell through env vars and jq,

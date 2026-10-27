@@ -170,7 +170,7 @@ test("toHtml report: header, all ids and labels, reference runs apart, method fo
   const html = toHtml([run("main", [hi("alpha"), hi("beta", false), timeout("gamma"), sr("delta", [], "boom")]), run("weakened-1", [hi("alpha", false)])]);
   assert.ok(!html.includes("<script"));
   assert.ok(!/(src|href)=|url\(|@import/.test(html));
-  for (const t of ["Firedrill", "What one tested configuration did", "Grading is deterministic", "alpha", "beta", "gamma", "delta", "PASS", "FAIL", "ERROR", "TIMEOUT", "Results matrix", "Findings", "Method and limits", "not a statement about the product"]) assert.ok(html.includes(t), t);
+  for (const t of ["FireDrill", "What one tested configuration did", "Grading is deterministic", "alpha", "beta", "gamma", "delta", "PASS", "FAIL", "ERROR", "TIMEOUT", "Results matrix", "Findings", "Method and limits", "not a statement about the product"]) assert.ok(html.includes(t), t);
   assert.match(html, /Reference configurations/);
   assert.match(html, /weakened-1[^<]*<span class="tag">Reference<\/span>/);
   assert.ok(!/main[^<]*<span class="tag">Reference/.test(html));

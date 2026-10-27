@@ -8,7 +8,7 @@ export default function RunIt() {
     <>
       <section className="hero compact">
         <h1>Run it yourself</h1>
-        <p className="lede">Enter your sandbox repo and copy the exact commands to test your own Alan workflow with Firedrill.</p>
+        <p className="lede">Enter your sandbox repo and copy the exact commands to test your own Alan workflow with FireDrill.</p>
       </section>
 
       <section aria-labelledby="safe">
@@ -17,7 +17,7 @@ export default function RunIt() {
           <ul>
             <li>This page runs nothing and sends nothing. It only builds text for you to copy.</li>
             <li>Everything happens in your terminal, against a repo you own.</li>
-            <li>Only test repos and workflows you own. Never point Firedrill at anyone else&apos;s.</li>
+            <li>Only test repos and workflows you own. Never point FireDrill at anyone else&apos;s.</li>
             <li>There is no token field here on purpose. A token never belongs in a browser: set <code>GITHUB_TOKEN</code> in your terminal (step below).</li>
           </ul>
         </div>

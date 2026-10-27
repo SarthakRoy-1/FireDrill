@@ -62,7 +62,7 @@ export function parseRepo(s: string): RepoRef {
   return { owner: m[1]!, repo: m[2]! };
 }
 
-/** Marker for comments Firedrill itself posts (none today). Excluded by body, never by author: Alan comments as the token owner. */
+/** Marker for comments FireDrill itself posts (none today). Excluded by body, never by author: Alan comments as the token owner. */
 export const FIREDRILL_MARKER = "firedrill:self";
 export const isWorkflowComment = (body: string | null | undefined): boolean => !!body && !body.includes(FIREDRILL_MARKER);
 

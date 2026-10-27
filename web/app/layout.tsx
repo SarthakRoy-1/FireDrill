@@ -9,7 +9,7 @@ const sans = Geist({ subsets: ["latin"], display: "swap", variable: "--font-sans
 const mono = Geist_Mono({ subsets: ["latin"], display: "swap", variable: "--font-mono", weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
-  title: { default: "Firedrill results", template: "%s · Firedrill" },
+  title: { default: "FireDrill results", template: "%s · FireDrill" },
   description: "Run the drill before production does.",
 };
 
@@ -22,7 +22,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         <main id="main">{children}</main>
         <footer className="foot">
           <div className="foot-in">
-            <span>Firedrill. Run the drill before production does.</span>
+            <span>FireDrill. Run the drill before production does.</span>
             <span className="foot-links">
               <a href="/report.html">Standalone report</a>
               <a href="https://github.com/SarthakRoy-1/FireDrill/blob/main/docs/EVIDENCE.md">Evidence pack</a>
