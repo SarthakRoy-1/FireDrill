@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarize, timeoutNotes, latestByScenario, normalTripwire, normalTripwireHits, runTripwire, runTripwireHits, tripText, type Run, type Scenario } from "./lib";
+import { summarize, timeoutNotes, latestByScenario, normalTripwire, normalTripwireHits, runTripwire, runTripwireHits, tripText, scenarioIndex, statusIn, countStatuses, CLASS_BLURB, type Run, type Scenario } from "./lib";
 
 const ok = (type: string) => ({ assertion: { type }, observed: true, ok: true, kind: "must" as const, detail: "" });
 const pass = (id: string): Scenario => ({ id, title: id, class: "c", passed: true, results: [ok("workflow_responded")] });
@@ -61,4 +61,47 @@ test("a run with no tripwire assertions is 'not checked'", () => {
   assert.equal(tripText(runTripwire(r)), "not checked");
   assert.equal(tripText({ hits: 0, checked: 4 }), "0 hits in 4 scenarios that check it");
   assert.equal(tripText({ hits: 1, checked: 1 }), "1 hit in 1 scenario that checks it");
+});
+
+test("scenarioIndex lists each id once across all runs, sorted; statusIn is null when not run", () => {
+  const w = run("Weakened", "2026-10-27T10:00:00Z", [pass("z")], "weakened");
+  const idx = scenarioIndex([b2, w]);
+  assert.deepEqual(idx.map((r) => r.id), ["a", "b", "c", "z"]);
+  assert.equal(statusIn(w, "a"), null);
+  assert.equal(statusIn(b2, "b"), "TIMEOUT");
+  assert.equal(countStatuses(b2.results).find((x) => x.st === "TIMEOUT")!.n, 2);
+  assert.ok(CLASS_BLURB["exfiltration"]);
+});
+
+import { parseRepoRef, repoError, commandSteps, defaultSandboxName } from "./lib";
+const cmds = (a: string, b = "", c = "") => commandSteps(a, b, c).flatMap((s) => s.blocks.map((x) => x.text)).join("\n");
+
+test("repo reference validation", () => {
+  for (const ok of ["a/b", "my-org/alan-sandbox", "SarthakRoy-1/alan.sandbox_x"]) assert.ok(parseRepoRef(ok), ok);
+  for (const bad of ["nope", "-x/y", "x-/y", "a/..", "a/.", "a b/c", "a/b/c", "a/", "/b", "a/b;rm", "a/b c"]) assert.equal(parseRepoRef(bad), null, bad);
+  assert.equal(parseRepoRef("a".repeat(40) + "/b"), null);
+  assert.equal(parseRepoRef("a/" + "b".repeat(101)), null);
+  assert.equal(repoError(""), null);
+  assert.ok(repoError("nope"));
+  assert.equal(repoError("a/b"), null);
+});
+
+test("command steps: clone only with a source; repo in doctor/run/cleanup; never interpolates bad input", () => {
+  const ids = (s: ReturnType<typeof commandSteps>) => s.map((x) => x.id);
+  assert.ok(!ids(commandSteps("a/b", "", "")).includes("clone"));
+  assert.ok(!ids(commandSteps("a/b", "bad", "")).includes("clone"));
+  assert.ok(ids(commandSteps("a/b", "org/app", "")).includes("clone"));
+  assert.match(cmds("a/b", "org/app"), /clone org\/app app-sandbox/);
+  assert.match(cmds("a/b", "org/app", "mine"), /clone org\/app mine/);
+  assert.equal(defaultSandboxName("org/app"), "app-sandbox");
+  const t = cmds("my-org/alan-sandbox");
+  for (const c of ["doctor", "run scenarios/attacks", "cleanup"]) assert.match(t, new RegExp(`${c}.* --repo my-org/alan-sandbox`));
+  assert.match(cmds("nope; rm"), /--repo <owner>\/<sandbox-repo>/);
+  assert.doesNotMatch(cmds("nope; rm"), /rm/);
+});
+
+test("no step contains a token value or token=", () => {
+  const all = JSON.stringify(commandSteps("a/b", "org/app", ""));
+  assert.doesNotMatch(all, /token=/);
+  assert.doesNotMatch(all, /gh[pous]_|github_pat_/);
 });

@@ -1,8 +1,31 @@
 import "./globals.css";
 import type { ReactNode } from "react";
+import type { Metadata } from "next";
+import Nav from "./Nav";
 
-export const metadata = { title: "Firedrill results", description: "Run the drill before production does.", icons: { icon: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%23d9480f'/%3E%3C/svg%3E" } };
+export const metadata: Metadata = {
+  title: { default: "Firedrill results", template: "%s · Firedrill" },
+  description: "Run the drill before production does.",
+};
 
 export default function Layout({ children }: { children: ReactNode }) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en">
+      <body>
+        <a href="#main" className="skip">Skip to content</a>
+        <Nav />
+        <main id="main">{children}</main>
+        <footer className="foot">
+          <div className="foot-in">
+            <span>Firedrill. Run the drill before production does.</span>
+            <span className="foot-links">
+              <a href="/report.html">Standalone report</a>
+              <a href="https://github.com/SarthakRoy-1/FireDrill/blob/main/docs/EVIDENCE.md">Evidence pack</a>
+              <a href="https://github.com/SarthakRoy-1/FireDrill">Source</a>
+            </span>
+          </div>
+        </footer>
+      </body>
+    </html>
+  );
 }

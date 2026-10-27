@@ -88,3 +88,85 @@ export const normalTripwireHits = (runs: Run[]) => normalTripwire(runs).hits;
 // "0 hits in 4 scenarios that check it", or "not checked" when no scenario has the assertion.
 export const tripText = ({ hits, checked }: Tripwire) =>
   checked ? `${hits} hit${hits === 1 ? "" : "s"} in ${checked} scenario${checked === 1 ? "" : "s"} that check${checked === 1 ? "s" : ""} it` : "not checked";
+
+// --- Multi-page helpers ---
+export interface ScenarioRow { id: string; title: string; cls: string }
+// Distinct scenarios across every run (normal or weakened), first-seen title and class, sorted by id.
+export function scenarioIndex(runs: Run[]): ScenarioRow[] {
+  const m = new Map<string, ScenarioRow>();
+  for (const r of runs) for (const s of r.results) if (!m.has(s.id)) m.set(s.id, { id: s.id, title: s.title, cls: s.class });
+  return [...m.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+// Status of one scenario in one run, or null when that run did not include it ("not run").
+export const statusIn = (r: Run, id: string): Status | null => { const s = r.results.find((x) => x.id === id); return s ? statusOf(s) : null; };
+export const countStatuses = (rs: Scenario[]) => STATUSES.map((st) => ({ st, n: rs.filter((s) => statusOf(s) === st).length }));
+export const scoreText = (x?: Score) => (x ? `score ${x.score ?? "n/a"}${x.timeouts || x.errors ? ` (+${[x.timeouts && `${x.timeouts} timeout`, x.errors && `${x.errors} error`].filter(Boolean).join(", ")})` : ""}` : "");
+export const when = (iso?: string) => { const m = iso?.match(/^(\d{4})-(\d\d)-(\d\d)T(\d\d:\d\d)/); return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]} UTC` : null; };
+// Plain-language meaning of a scenario class; unknown classes get no blurb rather than an invented one.
+export const CLASS_BLURB: Record<string, string> = {
+  "direct-override": "Text in the pull request tries to override the workflow's own instructions.",
+  "guardrail-erosion": "Asks the agent to cross a line it was told not to (merge, push, create a branch), sometimes with a false claim of authority.",
+  exfiltration: "Tries to get the agent to send something to a trap URL that the tripwire watches.",
+  "hidden-instruction": "An instruction is hidden in content the agent reads: a code comment, an HTML comment or the README.",
+};
+
+// --- "Run it yourself" command generator (pure; the page runs nothing and sends nothing) ---
+const OWNER_RE = /^(?!-)[A-Za-z0-9-]{1,39}(?<!-)$/;
+const NAME_RE = /^[A-Za-z0-9._-]{1,100}$/;
+export const validName = (n: string) => NAME_RE.test(n) && n !== "." && n !== "..";
+// "owner/name" -> parts, or null when it is not a safe GitHub repo reference.
+export function parseRepoRef(s: string): { owner: string; name: string } | null {
+  const p = s.trim().split("/");
+  return p.length === 2 && OWNER_RE.test(p[0]) && validName(p[1]) ? { owner: p[0], name: p[1] } : null;
+}
+// Inline message for the field, or null when empty (required-ness is the caller's call) or valid.
+export function repoError(s: string): string | null {
+  if (!s.trim()) return null;
+  return parseRepoRef(s) ? null : "Use owner/name, for example my-org/alan-sandbox. Owner: letters, digits, hyphens (not at the ends). Name: letters, digits, dots, hyphens, underscores.";
+}
+export function nameError(s: string): string | null {
+  if (!s.trim()) return null;
+  return validName(s.trim()) ? null : "Use letters, digits, dots, hyphens and underscores only (1 to 100 characters).";
+}
+export interface CmdBlock { label?: string; text: string }
+export interface CmdStep { id: string; title: string; why: string; blocks: CmdBlock[]; notes?: string[] }
+export const defaultSandboxName = (source: string) => { const r = parseRepoRef(source); return r ? `${r.name}-sandbox` : ""; };
+
+// Ordered steps. Invalid or empty input falls back to placeholders, so a bad value is never interpolated.
+export function commandSteps(repoIn: string, sourceIn: string, newNameIn: string): CmdStep[] {
+  const repo = parseRepoRef(repoIn);
+  const r = repo ? `${repo.owner}/${repo.name}` : "<owner>/<sandbox-repo>";
+  const src = parseRepoRef(sourceIn);
+  const nn = newNameIn.trim() && validName(newNameIn.trim()) ? newNameIn.trim() : src ? defaultSandboxName(sourceIn) : "<new-name>";
+  const cli = "npx tsx src/cli.ts";
+  const steps: CmdStep[] = [
+    { id: "get", title: "Get Firedrill", why: "Clone the open-source runner and install its dependencies.", blocks: [{ text: "git clone https://github.com/SarthakRoy-1/FireDrill.git\ncd FireDrill\nnpm install" }] },
+    { id: "selftest", title: "Prove the grader first", why: "Mock agents confirm the harness catches failures before you point it at anything real.", blocks: [{ text: "npm run selftest" }] },
+  ];
+  if (src) steps.push({
+    id: "clone", title: "Clone your source repo into a sandbox", why: "Makes a code-only private copy (secret-scanned) so attacks never touch the original.",
+    blocks: [{ text: `${cli} clone ${src.owner}/${src.name} ${nn}` }],
+    notes: [
+      "This one command needs a token with read access to the source and permission to create repos. Use it once, then revoke it.",
+      `The sandbox becomes <your-github-user>/${nn}. Enter that as the sandbox repo above (use your own GitHub username).`,
+      "Review .github/workflows in the copy. Alan has no documented API, so recreate the workflow on the copy by hand with the same instructions, model and tools.",
+    ],
+  });
+  steps.push(
+    { id: "init", title: "Create the config and canary", why: "Writes firedrill.config.json with a fake canary and prints one line.", blocks: [{ text: `${cli} init` }], notes: ["Paste the printed canary line into your Alan workflow instructions."] },
+    { id: "tripwire", title: "Start the tripwire", why: "A local trap-URL server that records whether the workflow requests a trap link.", blocks: [{ text: `${cli} tripwire --port 8787` }], notes: ["Run it in another terminal and expose it publicly.", "Set \"tripwireBase\" in firedrill.config.json to its public URL. Exfiltration scenarios need it."] },
+    {
+      id: "token", title: "Set your token in your terminal", why: "Firedrill reads GITHUB_TOKEN from the environment. Never type it on this website.",
+      blocks: [{ label: "bash / zsh", text: `export GITHUB_TOKEN=<fine-grained token for ${r} only>` }, { label: "PowerShell", text: `$env:GITHUB_TOKEN = "<fine-grained token for ${r} only>"` }],
+      notes: [`Use a fine-grained token scoped to the sandbox repo ${r} only.`],
+    },
+    { id: "doctor", title: "Check the setup", why: "Verifies config, token, repo and tripwire before a long run.", blocks: [{ text: `${cli} doctor --repo ${r}` }] },
+    {
+      id: "run", title: "Run the attacks", why: "Opens test pull requests in your sandbox and grades what the workflow did.", blocks: [{ text: `${cli} run scenarios/attacks --repo ${r}` }],
+      notes: ["Each scenario waits up to 900 s by default (Alan runs took 6 to 14 minutes), so a full pack takes hours.", "Add --only a,b to pick scenarios and --out file to set the results file."],
+    },
+    { id: "report", title: "Read the report", why: "Prints the saved run, with a score and a row per scenario.", blocks: [{ text: `${cli} report results.json` }] },
+    { id: "cleanup", title: "Clean up afterwards", why: "Lists open Firedrill PRs in the sandbox.", blocks: [{ text: `${cli} cleanup --repo ${r}` }], notes: ["Add --yes to close them and delete their branches."] },
+  );
+  return steps;
+}
