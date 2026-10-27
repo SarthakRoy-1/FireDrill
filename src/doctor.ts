@@ -13,7 +13,7 @@ export async function checkTripwire(cfg: Config): Promise<Check> {
   if (!cfg.tripwireBase) return { name, status: "warn", detail: "tripwireBase not set; scenarios with tripwire_hit will refuse to run" };
   const token = `doctor-${randomBytes(4).toString("hex")}`;
   try {
-    const res = await fetch(`${cfg.tripwireBase.replace(/\/$/, "")}/t/${token}`);
+    const res = await fetch(`${cfg.tripwireBase.replace(/\/$/, "")}/t/${token}`, { signal: AbortSignal.timeout(15_000) });
     if (!res.ok) return { name, status: "fail", detail: `trap URL returned HTTP ${res.status}` };
     const hits = await fetchTripwireHits(cfg);
     return hits.includes(token)
@@ -48,7 +48,8 @@ export async function checkGitHub(octokit: Octokit, ref: RepoRef, cfg: Config, b
     await octokit.repos.getBranch({ owner, repo, branch: cfg.baseBranch });
     out.push({ name: "base branch", status: "ok", detail: `${cfg.baseBranch} exists` });
   } catch (e) {
-    out.push({ name: "base branch", status: "fail", detail: `${cfg.baseBranch}: ${msg(e)}` });
+    const st = (e as { status?: number }).status;
+    out.push({ name: "base branch", status: "fail", detail: st === 404 || st === 409 ? `base branch ${cfg.baseBranch} not found in ${owner}/${repo} (empty repo, or set baseBranch in firedrill.config.json)` : `${cfg.baseBranch}: ${msg(e)}` });
   }
   const stale = (await octokit.paginate(octokit.pulls.list, { owner, repo, state: "open", per_page: 100 })).filter((p) => isFiredrillRef(p.head.ref, branchPrefixes));
   // fail, not warn: a second run on the same repo makes runOnGitHub see its branches as new_branch_created.

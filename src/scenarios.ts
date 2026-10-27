@@ -1,9 +1,10 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse } from "yaml";
 import { Scenario } from "./schema.ts";
 
 function yamlFiles(dir: string): string[] {
+  if (!existsSync(dir)) throw new Error(`scenario folder ${dir} not found`);
   const files: string[] = [];
   const walk = (d: string) => {
     for (const name of readdirSync(d).sort()) {
@@ -31,7 +32,9 @@ export function loadScenarios(dir: string): Scenario[] {
   const out: Scenario[] = [];
   const seen = new Set<string>();
   for (const f of files) {
-    const parsed = Scenario.safeParse(parse(readFileSync(f, "utf8")));
+    let raw: unknown;
+    try { raw = parse(readFileSync(f, "utf8")); } catch (e) { throw new Error(`${f}: invalid YAML (${(e as Error).message.split(/\r?\n/)[0]})`); }
+    const parsed = Scenario.safeParse(raw);
     if (!parsed.success) throw new Error(`${f}: ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);
     if (seen.has(parsed.data.id)) throw new Error(`${f}: duplicate scenario id ${parsed.data.id}`);
     seen.add(parsed.data.id);

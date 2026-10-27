@@ -1,18 +1,20 @@
 #!/usr/bin/env -S npx tsx
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { Octokit } from "@octokit/rest";
 import { Config, Scenario } from "./schema.ts";
 import { loadScenarios, scenarioPaths, selectScenarios, shardOf, usesTripwire } from "./scenarios.ts";
 import { parse } from "yaml";
 import { generateVariants, variantYaml } from "./generate.ts";
-import { score, errorResult, isTimeout, type ScenarioResult } from "./scorer.ts";
+import { score, isTimeout, type ScenarioResult } from "./scorer.ts";
 import { contextFor } from "./template.ts";
 import { hardenedPrompt, heatmap, hintFor, severityOf, summarize, toBadge, toHtml, toSarif, type ConfigRun } from "./report.ts";
 import { checkGitHub, checkTripwire, type Check } from "./doctor.ts";
 import { mockAgent, type MockKind } from "./mock.ts";
-import { installRetry, parseRepo, runOnGitHub, sleep } from "./github.ts";
+import { installRetry, parseRepo } from "./github.ts";
+import { loadRuns, readJsonFile } from "./results.ts";
+import { runScenarios, writeAtomic } from "./runner.ts";
 import { cleanup } from "./cleanup.ts";
 import { startTripwire } from "./tripwire.ts";
 import { cloneSandbox } from "./clone.ts";
@@ -26,15 +28,13 @@ function flag(args: string[], name: string): string | undefined {
 
 function loadConfig(): Config {
   if (!existsSync(CONFIG_FILE)) throw new Error(`${CONFIG_FILE} not found. Run: npx tsx src/cli.ts init`);
-  return Config.parse(JSON.parse(readFileSync(CONFIG_FILE, "utf8")));
+  const parsed = Config.safeParse(readJsonFile(CONFIG_FILE));
+  if (!parsed.success) throw new Error(`${CONFIG_FILE}: ${parsed.error.issues.map((i) => `${i.path.join(".") || "root"}: ${i.message}`).join("; ")}`);
+  return parsed.data;
 }
 
-/** Runs from one or more saved results files. With several files, run names get the file name so columns stay distinct. */
-function loadRuns(files: string[]): ConfigRun[] {
-  const list = files.length ? files : ["results.json"];
-  return list.flatMap((f) => (JSON.parse(readFileSync(f, "utf8")) as { runs: ConfigRun[] }).runs
-    .map((r) => (list.length > 1 ? { ...r, name: `${basename(f, ".json")}:${r.name}` } : r)));
-}
+/** GITHUB_TOKEN with the stray spaces or newline that copy/paste and `echo` leave (they break the auth header). */
+const tokenFromEnv = () => process.env.GITHUB_TOKEN?.trim();
 
 /** Octokit with the bounded retry hook; each retry is logged. */
 const octokitFor = (token: string) => installRetry(new Octokit({ auth: token }), (m) => console.log(`  ${m}`));
@@ -99,7 +99,7 @@ async function main() {
     case "run": {
       const dir = args[0] ?? "scenarios/attacks";
       const repo = parseRepo(flag(args, "repo") ?? "");
-      const token = process.env.GITHUB_TOKEN;
+      const token = tokenFromEnv();
       if (!token) throw new Error("Set GITHUB_TOKEN (fine-grained, scoped to the sandbox repo only)");
       const cfg = loadConfig();
       const failedFile = flag(args, "only-failed");
@@ -116,27 +116,24 @@ async function main() {
       if (!selected.length) { console.log(`Shard ${shard} has no scenarios (${picked.length} selected in total).`); return; }
       if (!cfg.tripwireBase && selected.some(usesTripwire)) throw new Error("scenarios use tripwire_hit but tripwireBase is not set in firedrill.config.json");
       const out = flag(args, "out") ?? "results.json";
+      // Fail now, not after the first scenario has used up its wait.
+      mkdirSync(dirname(out) || ".", { recursive: true });
       // One run per repeat, named name-1, name-2, ... so the heatmap shows variance side by side.
       const runs: ConfigRun[] = Array.from({ length: repeat }, (_, i) => ({ name: repeat > 1 ? `${name}-${i + 1}` : name, results: [] }));
-      for (const { name: runName, results } of runs) for (const [k, s] of selected.entries()) {
-        // Pause between scenarios (not before the first) to stay under GitHub's content-creation limits (secondary rate limits).
-        if (k > 0) await sleep(2000);
-        console.log(`> ${s.id}${repeat > 1 ? ` (${runName})` : ""}`);
-        try {
-          const ctx = contextFor(cfg, s);
-          const r = score(s, await runOnGitHub(octokit, repo, s, ctx, cfg, (m) => console.log(`  ${m}`)), ctx);
-          console.log(`  ${r.passed ? "PASS" : isTimeout(r) ? "TIMEOUT" : "FAIL"}`);
-          results.push(r);
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          console.log(`  ERROR: ${msg}`);
-          results.push(errorResult(s, msg));
-        }
-        writeFileSync(out, JSON.stringify({ generatedAt: new Date().toISOString(), runs }, null, 2));
-      }
+      // First Ctrl+C: stop after cleaning up the current PR. Second: leave at once.
+      const ctl = new AbortController();
+      const onSignal = () => {
+        if (ctl.signal.aborted) process.exit(130);
+        console.log("\nInterrupted: closing the current PR and deleting its branch, then stopping. Press Ctrl+C again to quit now.");
+        ctl.abort();
+      };
+      process.on("SIGINT", onSignal);
+      process.on("SIGTERM", onSignal);
+      const end = await runScenarios(octokit, repo, selected, runs, cfg, { out, signal: ctl.signal, log: (m) => console.log(m) });
       console.log("\n" + heatmap(runs));
       for (const r of runs) printFailures(r.results);
-      process.exitCode = runs.every((r) => r.results.every((x) => x.passed)) ? 0 : 1;
+      console.log(`\nResults written to ${out}`);
+      process.exitCode = end === "interrupted" ? 130 : end === "auth" ? 1 : runs.every((r) => r.results.every((x) => x.passed)) ? 0 : 1;
       return;
     }
     case "tripwire": {
@@ -158,7 +155,7 @@ async function main() {
       const badge = flag(args, "badge");
       if (badge) { writeFileSync(badge, JSON.stringify(toBadge(runs.at(-1)!)) + "\n"); console.log(`Wrote badge (last run) to ${badge}`); }
       const html = flag(args, "html");
-      if (html) { writeFileSync(html, toHtml(runs)); console.log(`Wrote HTML report to ${html}`); }
+      if (html) { writeAtomic(html, toHtml(runs)); console.log(`Wrote HTML report to ${html}`); }
       return;
     }
     case "generate": {
@@ -188,7 +185,7 @@ async function main() {
     case "clone": {
       const [srcArg, newName] = positional(args);
       if (!srcArg || !newName) throw new Error("usage: clone <owner>/<src-repo> <new-name>");
-      const token = process.env.GITHUB_TOKEN;
+      const token = tokenFromEnv();
       if (!token) throw new Error("Set GITHUB_TOKEN (needs read on the source and permission to create repos; use once, then revoke)");
       const created = await cloneSandbox(octokitFor(token), parseRepo(srcArg), newName, (m) => console.log(m));
       console.log(`\nDone: https://github.com/${created} (private, code only, one fresh commit). Next, by hand:`);
@@ -201,7 +198,7 @@ async function main() {
     }
     case "cleanup": {
       const repo = parseRepo(flag(args, "repo") ?? "");
-      const token = process.env.GITHUB_TOKEN;
+      const token = tokenFromEnv();
       if (!token) throw new Error("Set GITHUB_TOKEN (fine-grained, scoped to the sandbox repo only)");
       const yes = args.includes("--yes");
       const found = await cleanup(octokitFor(token), repo, branchPrefixes(), yes, (m) => console.log(m));
@@ -216,7 +213,7 @@ async function main() {
       const checks: Check[] = [];
       let cfg: Config | undefined;
       try { cfg = loadConfig(); checks.push({ name: "config", status: "ok", detail: `${CONFIG_FILE} valid` }); } catch (e) { checks.push({ name: "config", status: "fail", detail: e instanceof Error ? e.message : String(e) }); }
-      const token = process.env.GITHUB_TOKEN;
+      const token = tokenFromEnv();
       checks.push(token ? { name: "GITHUB_TOKEN", status: "ok", detail: "set" } : { name: "GITHUB_TOKEN", status: "fail", detail: "not set (fine-grained, sandbox repo only)" });
       const repoArg = flag(args, "repo");
       if (!repoArg) checks.push({ name: "repo", status: "fail", detail: "pass --repo owner/name" });

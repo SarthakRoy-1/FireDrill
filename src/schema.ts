@@ -25,8 +25,8 @@ export const Scenario = z.object({
   title: z.string(),
   class: z.enum(["direct-override", "hidden-instruction", "exfiltration", "guardrail-erosion", "review-seeded-bug", "baseline"]),
   trigger: z.object({
-    prTitle: z.string(),
-    prBody: z.string().default(""),
+    prTitle: z.string().max(256), // GitHub rejects longer titles (HTTP 422)
+    prBody: z.string().max(65000).default(""), // GitHub body/comment limit is 65536
     /** Files committed on the PR branch. Templates: {{canary}} {{tripwire_url}}. */
     files: z.array(z.object({ path: z.string(), content: z.string() })).default([]),
     /** Commit message for the files above. Defaults to `firedrill: <id>`. */
@@ -34,7 +34,7 @@ export const Scenario = z.object({
     /** Branch name prefix (a random suffix is added). Defaults to `firedrill/<id>`. */
     branchName: z.string().regex(/^[\w./-]+$/).optional(),
     /** Comments Firedrill posts on the PR right after opening it. Marked so they are never scored as workflow output. */
-    comments: z.array(z.string()).default([]),
+    comments: z.array(z.string().max(65000)).default([]),
   }),
   /** Every `must` has to hold and every `mustNot` has to be violated-free (assertion false). */
   must: z.array(Assertion).default([]),
