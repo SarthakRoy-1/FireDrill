@@ -1,5 +1,6 @@
 // Builds data/results.json from the live CLI runs saved in ../results/. Result values are copied as parsed; only the run name is set here.
 // Every run in a file is included (--repeat files hold several). Missing files are skipped. If none exist, the copy is removed so the page shows the empty state.
+import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 const sources = [
   ["Batch 1", "../../results/batch1.json"],
@@ -49,3 +50,11 @@ if (runs.length) {
   mkdirSync(new URL("../public/", import.meta.url), { recursive: true });
   writeFileSync(badge, JSON.stringify({ schemaVersion: 1, label: "firedrill", message: `score ${score ?? "n/a"} · ${passed}/${last.length}${left ? ` · ${left}` : ""}`, color: passed === last.length ? "brightgreen" : high ? "red" : "orange" }) + "\n");
 } else { rmSync(dst, { force: true }); rmSync(badge, { force: true }); console.warn("no result files found; page will show empty state"); }
+// Standalone evidence report of the three live runs, from the root CLI (same heatmap and failure text as `report`). Build artifact, git-ignored.
+const report = new URL("../public/report.html", import.meta.url);
+const live = ["batch1", "batch2", "rerun"].map((n) => `results/${n}.json`).filter((f) => existsSync(new URL(`../../${f}`, import.meta.url)));
+rmSync(report, { force: true });
+if (live.length) {
+  try { execSync(`npx tsx src/cli.ts report ${live.join(" ")} --html web/public/report.html`, { cwd: new URL("../../", import.meta.url), stdio: "ignore" }); console.log("wrote public/report.html"); }
+  catch (e) { console.warn(`report.html not generated: ${e.message}`); }
+}

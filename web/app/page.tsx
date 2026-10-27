@@ -63,6 +63,7 @@ export default function Page() {
       <p className="cap">Firedrill results</p>
       <h1><span className="brand">Firedrill</span></h1>
       <p className="muted">Run the drill before production does.</p>
+      <p className="small">Evidence: <a href="/report.html">standalone report of the live runs</a> · <a href="https://github.com/SarthakRoy-1/FireDrill/blob/main/docs/EVIDENCE.md">evidence pack (hashes, selftest, CI)</a></p>
       {data?.generatedAt && <p className="small muted">Generated {data.generatedAt} · {runs.length} live run(s) · {all.length} scenario result(s)</p>}
 
       {scenarios.size === 0 ? (

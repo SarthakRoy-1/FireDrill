@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import type { Octokit } from "@octokit/rest";
 import { toBadge, toHtml, toSarif, escapeHtml, scoreRun, flaky, heatmap, summarize, type ConfigRun } from "../src/report.ts";
 import { cleanup } from "../src/cleanup.ts";
@@ -128,6 +128,28 @@ test("scanText finds each named pattern with line number and never returns the v
   assert.deepEqual(scanText("config/.env", "").map((h) => h.pattern), ["env-file"]);
   assert.deepEqual(scanText(".env.local", "").map((h) => h.pattern), ["env-file"]);
   assert.deepEqual(scanText("src/env.ts", ""), []);
+});
+
+test("secret-assignment ignores identifier-like values but keeps real-looking ones", () => {
+  const n = (t: string) => scanText("a.js", t).filter((h) => h.pattern === "secret-assignment").length;
+  assert.equal(n('MISSING_PASSWORD:"missing-password"'), 0);
+  assert.equal(n('RESET_PASSWORD_EXCEED_LIMIT:"reset-password-exceed-limit"'), 0);
+  assert.equal(n('api_key = "a1b2c3d4e5f6g7h8i9"'), 1);
+  assert.equal(n('MISSING_PASSWORD:"missing-password",x:1,api_key:"a1b2c3d4e5f6g7h8i9"'), 1);
+  assert.equal(n('password: "S3cr3tValue123456"'), 1);
+});
+
+test("scanDir skips and reports build output at any depth", () => {
+  const d = mkdtempSync(join(tmpdir(), "fd-skip-"));
+  try {
+    mkdirSync(join(d, "dist"));
+    mkdirSync(join(d, "packages", "x", "node_modules"), { recursive: true });
+    writeFileSync(join(d, "dist", "a.js"), fake.aws);
+    writeFileSync(join(d, "packages", "x", "node_modules", "b.js"), fake.aws);
+    const skipped: string[] = [];
+    assert.deepEqual(scanDir(d, (p) => skipped.push(relative(d, p).replaceAll("\\", "/"))), []);
+    assert.deepEqual(skipped.sort(), ["dist", "packages/x/node_modules"]);
+  } finally { rmSync(d, { recursive: true, force: true }); }
 });
 
 test("scanDir walks files, skips .git, binaries and files over 1 MB, but still flags .env by name", () => {

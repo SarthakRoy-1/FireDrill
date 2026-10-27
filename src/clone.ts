@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, openSync, readSync, closeSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { basename, join, relative } from "node:path";
 import { Octokit } from "@octokit/rest";
 import type { RepoRef } from "./github.ts";
 
@@ -14,16 +14,28 @@ const PATTERNS: [string, RegExp][] = [
   ["private-key", /-----BEGIN [A-Z ]*PRIVATE KEY-----/],
   ["slack-token", /xox[baprs]-[A-Za-z0-9-]{8,}/],
   ["stripe-live-key", /sk_live_[A-Za-z0-9]{8,}/],
-  ["secret-assignment", /(?:api[_-]?key|secret|password)["']?\s*[:=]\s*["'][^"'\s]{16,}["']/i],
+  ["secret-assignment", /(?:api[_-]?key|secret|password)["']?\s*[:=]\s*["']([^"'\s]{16,})["']/i],
 ];
 const MAX_BYTES = 1024 * 1024;
+/** Generated output is never copied or scanned, at any depth. */
+export const SKIP_DIRS = new Set(["node_modules", "dist", "build", "out", ".next", "coverage", ".vercel", ".turbo"]);
+
+// Identifier-like values (error codes, labels) are not secrets: need a digit and a letter, and not lowercase words joined by - or _.
+function looksSecret(v: string): boolean {
+  return /\d/.test(v) && /[a-z]/i.test(v) && !/^[a-z]+(?:[-_][a-z]+)*$/.test(v);
+}
 
 /** Pure scan of one file's text. Reports file, line and pattern name only, never the matched value. */
 export function scanText(file: string, text: string): SecretHit[] {
   const hits: SecretHit[] = [];
   if (/^\.env(\..+)?$/.test(file.split("/").pop()!)) hits.push({ file, line: 1, pattern: "env-file" });
   text.split("\n").forEach((l, i) => {
-    for (const [pattern, re] of PATTERNS) if (re.test(l)) hits.push({ file, line: i + 1, pattern });
+    for (const [pattern, re] of PATTERNS) {
+      const hit = pattern === "secret-assignment"
+        ? [...l.matchAll(new RegExp(re.source, re.flags + "g"))].some((m) => looksSecret(m[1]!))
+        : re.test(l);
+      if (hit) hits.push({ file, line: i + 1, pattern });
+    }
   });
   return hits;
 }
@@ -33,15 +45,15 @@ function isBinary(p: string): boolean {
   try { const b = Buffer.alloc(8000); return b.subarray(0, readSync(fd, b, 0, 8000, 0)).includes(0); } finally { closeSync(fd); }
 }
 
-/** Scans every file under dir except .git. .env files count by name; binaries and files over 1 MB are skipped. */
-export function scanDir(dir: string): SecretHit[] {
+/** Scans every file under dir except .git and SKIP_DIRS (reported via onSkip, not deleted). .env files count by name; binaries and files over 1 MB are skipped. */
+export function scanDir(dir: string, onSkip: (path: string) => void = () => {}): SecretHit[] {
   const hits: SecretHit[] = [];
   const walk = (d: string) => {
     for (const name of readdirSync(d)) {
       const p = join(d, name);
       const rel = relative(dir, p).replaceAll("\\", "/");
       const st = statSync(p);
-      if (st.isDirectory()) { if (name !== ".git") walk(p); continue; }
+      if (st.isDirectory()) { if (SKIP_DIRS.has(name)) onSkip(p); else if (name !== ".git") walk(p); continue; }
       if (st.size > MAX_BYTES || isBinary(p)) { hits.push(...scanText(rel, "")); continue; } // name checks still apply
       hits.push(...scanText(rel, readFileSync(p, "utf8")));
     }
@@ -66,7 +78,10 @@ export async function cloneSandbox(octokit: Octokit, src: RepoRef, newName: stri
     git(tmp, "clone", "--depth", "1", `https://github.com/${src.owner}/${src.repo}.git`, "src");
     const dir = join(tmp, "src");
     rmSync(join(dir, ".git"), { recursive: true, force: true, maxRetries: 3 });
-    const hits = scanDir(dir);
+    const skipped: string[] = [];
+    const hits = scanDir(dir, (p) => skipped.push(p));
+    for (const p of skipped) rmSync(p, { recursive: true, force: true, maxRetries: 3 }); // so `git add -A` never sees them
+    if (skipped.length) log(`skipped build output: ${[...new Set(skipped.map((p) => basename(p)))].join(", ")}`);
     if (hits.length) throw new Error(`refusing to copy: possible secrets found (values not shown). Remove or rotate them in the source first.\n${hits.map((h) => `  ${h.file}:${h.line} ${h.pattern}`).join("\n")}`);
     await octokit.repos.createForAuthenticatedUser({ name: newName, private: true });
     log(`created private repo ${me}/${newName}`);

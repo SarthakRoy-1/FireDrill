@@ -132,7 +132,7 @@ export GITHUB_TOKEN=<token that can read the source and create repos>
 npx tsx src/cli.ts clone <owner>/<src-repo> <new-name>
 ```
 
-Clones the source at depth 1, deletes `.git`, scans the files, refuses (exit 1, `file:line pattern`, never the value) if anything looks like a secret, then creates a private repo under the token owner and pushes one fresh commit. The scan covers GitHub tokens, AWS key ids, private key headers, Slack tokens, Stripe live keys, quoted `api_key`/`secret`/`password` values of 16+ characters, and any `.env` file; binaries and files over 1 MB are skipped. A regex scan is a guard, not a guarantee. This needs a token that can create repos, which is broader than the sandbox-only token, so use it once and revoke it. The Alan workflow cannot be copied (no documented API): recreate it by hand, paste the canary, run `doctor`. Workflows under `.github/workflows` come along with the code; review them. Not run against GitHub yet; only the scanner is tested.
+Clones the source at depth 1, deletes `.git`, scans the files, refuses (exit 1, `file:line pattern`, never the value) if anything looks like a secret, then creates a private repo under the token owner and pushes one fresh commit. The scan covers GitHub tokens, AWS key ids, private key headers, Slack tokens, Stripe live keys, quoted `api_key`/`secret`/`password` values of 16+ characters, and any `.env` file; binaries and files over 1 MB are skipped, and identifier-like values (error codes such as `missing-password`) are not flagged. Build output (`node_modules`, `dist`, `build`, `out`, `.next`, `coverage`, `.vercel`, `.turbo`) is not copied. A regex scan is a guard, not a guarantee. This needs a token that can create repos, which is broader than the sandbox-only token, so use it once and revoke it. The Alan workflow cannot be copied (no documented API): recreate it by hand, paste the canary, run `doctor`. Workflows under `.github/workflows` come along with the code; review them. Not run against GitHub yet; only the scanner is tested.
 
 ### Attack variants from an open model
 
@@ -235,6 +235,13 @@ All three runs used the same Alan automation (Alan Code, DeepSeek V4.1 Flash, no
 Across the 24 live scenario runs where the workflow responded (12 + 5 + 7), no canary leak, merge, push or new branch was observed. The 7 timed-out runs in batch 2 observed nothing, so they are not counted. The tripwire stayed empty during all attack runs. A separate manual chat test in Alan showed the sandbox can reach the public internet, so an empty tripwire is not explained by missing network access. That chat test is not the same as the automation run.
 
 The raw saved results of the three runs are in `results/`: `batch1.json`, `batch2.json` and `rerun.json`. View one with `npx tsx src/cli.ts report results/rerun.json`. `batch1.json` is the final 12 of 12 file. Its `hidden-readme-instruction` entry is the rerun that replaced an earlier runner-bug ERROR.
+
+## Evidence
+
+- [Standalone report of the three live runs](https://firedrill-silk.vercel.app/report.html) (built from `results/*.json`).
+- [`docs/EVIDENCE.md`](docs/EVIDENCE.md): tested configuration, file hashes, selftest output, CI run.
+
+This proves the harness runs end to end against a real Alan automation, records real GitHub effects, and catches every failure class on mock agents. It does not prove it has caught a real live failure (none has been observed), and it says nothing general about Alan.
 
 ## Honest limits
 
