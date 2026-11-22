@@ -9,7 +9,7 @@ const sans = Geist({ subsets: ["latin"], display: "swap", variable: "--font-sans
 const mono = Geist_Mono({ subsets: ["latin"], display: "swap", variable: "--font-mono", weight: ["400", "500", "600"] });
 
 export const metadata: Metadata = {
-  title: { default: "FireDrill results", template: "%s · FireDrill" },
+  title: { default: "FireDrill: attack-test your Alan workflow", template: "%s · FireDrill" },
   description: "Run the drill before production does.",
 };
 
