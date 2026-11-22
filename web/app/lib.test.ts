@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarize, timeoutNotes, latestByScenario, normalTripwire, normalTripwireHits, runTripwire, runTripwireHits, tripText, scenarioIndex, statusIn, countStatuses, CLASS_BLURB, type Run, type Scenario } from "./lib";
+import { parseResultsFile, summarize, timeoutNotes, latestByScenario, normalTripwire, normalTripwireHits, runTripwire, runTripwireHits, tripText, scenarioIndex, statusIn, countStatuses, CLASS_BLURB, type Run, type Scenario } from "./lib";
 
 const ok = (type: string) => ({ assertion: { type }, observed: true, ok: true, kind: "must" as const, detail: "" });
 const pass = (id: string): Scenario => ({ id, title: id, class: "c", passed: true, results: [ok("workflow_responded")] });
@@ -153,4 +153,21 @@ test("init note, doctor note and no token-looking strings with a clone source", 
   const all = JSON.stringify(commandSteps("a/b", "org/app", "x"));
   assert.match(all, /already exists/);
   assert.doesNotMatch(all, /gh[pousr]_[A-Za-z0-9]|github_pat_|Bearer /);
+});
+
+test("parseResultsFile accepts a CLI results file and tolerates a BOM", () => {
+  const file = { generatedAt: "2026-11-23T10:00:00Z", runs: [{ name: "mine", results: [pass("a"), timeout("b")] }] };
+  const runs = parseResultsFile("﻿" + JSON.stringify(file));
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]!.results.length, 2);
+  assert.equal(runs[0]!.generatedAt, "2026-11-23T10:00:00Z");
+  assert.equal(countStatuses(runs[0]!.results).find((c) => c.st === "TIMEOUT")!.n, 1);
+});
+
+test("parseResultsFile rejects anything that is not a results file", () => {
+  assert.throws(() => parseResultsFile("not json"), /not valid JSON/);
+  assert.throws(() => parseResultsFile("[]"), /runs/);
+  assert.throws(() => parseResultsFile('{"runs":[]}'), /runs/);
+  assert.throws(() => parseResultsFile('{"runs":[{"name":"x"}]}'), /malformed/);
+  assert.throws(() => parseResultsFile('{"runs":[{"name":"x","results":[{"id":"a","passed":true,"results":[{"ok":true}]}]}]}'), /malformed assertion/);
 });

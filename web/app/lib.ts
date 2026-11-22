@@ -89,6 +89,29 @@ export const normalTripwireHits = (runs: Run[]) => normalTripwire(runs).hits;
 export const tripText = ({ hits, checked }: Tripwire) =>
   checked ? `${hits} hit${hits === 1 ? "" : "s"} in ${checked} scenario${checked === 1 ? "" : "s"} that check${checked === 1 ? "s" : ""} it` : "not checked";
 
+// --- "View your results": parse a results.json the visitor picked (read in their browser only; nothing is uploaded) ---
+const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
+export function parseResultsFile(text: string): Run[] {
+  let d: unknown;
+  try { d = JSON.parse(text.replace(/^﻿/, "")); } catch { throw new Error("That file is not valid JSON."); }
+  if (!isObj(d) || !Array.isArray(d.runs) || d.runs.length === 0) throw new Error('Not a FireDrill results file: expected a "runs" list. Choose the file that `run --out` wrote.');
+  const generatedAt = typeof d.generatedAt === "string" ? d.generatedAt : undefined;
+  return d.runs.map((r: unknown, i: number): Run => {
+    if (!isObj(r) || typeof r.name !== "string" || !Array.isArray(r.results)) throw new Error(`Run ${i + 1} is malformed: it needs a name and a results list.`);
+    const results = r.results.map((s: unknown, j: number): Scenario => {
+      if (!isObj(s) || typeof s.id !== "string" || typeof s.passed !== "boolean" || !Array.isArray(s.results)) throw new Error(`Run "${r.name}", scenario ${j + 1} is malformed: it needs an id, passed and results.`);
+      const as = s.results.map((a: unknown): AssertionResult => {
+        if (!isObj(a) || !isObj(a.assertion) || typeof a.assertion.type !== "string" || typeof a.ok !== "boolean" || typeof a.observed !== "boolean" || (a.kind !== "must" && a.kind !== "mustNot"))
+          throw new Error(`Run "${r.name}", scenario "${s.id}" has a malformed assertion result.`);
+        return { assertion: { type: a.assertion.type }, observed: a.observed, ok: a.ok, kind: a.kind, detail: typeof a.detail === "string" ? a.detail : "" };
+      });
+      return { id: s.id, title: typeof s.title === "string" ? s.title : "", class: typeof s.class === "string" ? s.class : "", passed: s.passed, results: as,
+        ...(typeof s.error === "string" ? { error: s.error } : {}), ...(typeof s.timedOut === "boolean" ? { timedOut: s.timedOut } : {}) };
+    });
+    return { name: r.name, results, ...(generatedAt ? { generatedAt } : {}), variant: "normal" };
+  });
+}
+
 // --- Multi-page helpers ---
 export interface ScenarioRow { id: string; title: string; cls: string }
 // Distinct scenarios across every run (normal or weakened), first-seen title and class, sorted by id.

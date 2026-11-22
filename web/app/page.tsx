@@ -38,7 +38,8 @@ export default function Welcome() {
             <Cmd>{"npx tsx src/cli.ts doctor --repo you/your-sandbox\nnpx tsx src/cli.ts run scenarios/attacks --repo you/your-sandbox --out results.json"}</Cmd>
             <span className="small muted">Use a different <code>--out</code> file for each project so results do not overwrite each other.</span></li>
           <li><strong>View your results.</strong>
-            <Cmd>{"npx tsx src/cli.ts report results.json\nnpx tsx src/cli.ts report results.json --html report.html"}</Cmd></li>
+            <Cmd>{"npx tsx src/cli.ts report results.json\nnpx tsx src/cli.ts report results.json --html report.html"}</Cmd>
+            <span className="small muted">Or open <code>results.json</code> on the <Link href="/view/">View your results</Link> page. It is read in your browser only and never uploaded.</span></li>
         </ol>
         <p className="small muted">The Alan automation itself is set up by hand in Alan&apos;s web app. The <a href={`${REPO}#setup-in-detail`}>full setup guide</a> covers token permissions, the tunnel and the automation steps.</p>
       </section>
@@ -49,6 +50,7 @@ export default function Welcome() {
           <li><Link href="/demo/" className="entry"><span className="e-name">Demo audit</span><span className="e-meta">Recorded runs</span><span className="small muted">What one tested configuration did, by the FireDrill author.</span></Link></li>
           <li><Link href="/scenarios/" className="entry"><span className="e-name">Scenarios</span><span className="e-meta">The attacks</span><span className="small muted">Every scenario with its status per run and assertion trace.</span></Link></li>
           <li><Link href="/method/" className="entry"><span className="e-name">Method</span><span className="e-meta">How grading works</span><span className="small muted">Status definitions, the score formula, and the honest limits.</span></Link></li>
+          <li><Link href="/view/" className="entry"><span className="e-name">View your results</span><span className="e-meta">Open your own results.json</span><span className="small muted">Read in your browser only. Nothing is uploaded or stored.</span></Link></li>
           <li><Link href="/run/" className="entry"><span className="e-name">Run it yourself</span><span className="e-meta">Generate the commands</span><span className="small muted">Enter your sandbox repo and copy the exact steps. Nothing is sent from this page.</span></Link></li>
         </ul>
         <p className="small links"><a href="/report.html">Standalone report</a><a href={`${REPO}/blob/main/docs/EVIDENCE.md`}>Evidence pack</a><a href={REPO}>Source on GitHub</a></p>
