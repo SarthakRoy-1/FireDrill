@@ -13,7 +13,7 @@ export default function Runs() {
     <>
       <section className="hero compact">
         <h1>Runs</h1>
-        <p className="lede">Every recorded run, as it was recorded. Counts are per run; the Overview summary takes only the latest result per scenario from the normal runs.</p>
+        <p className="lede">Every recorded run, as it was recorded. Counts are per run; the demo summary takes only the latest result per scenario from the normal runs.</p>
       </section>
       {runs.length === 0 ? <Empty /> : (
         <>

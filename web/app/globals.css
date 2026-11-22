@@ -197,3 +197,11 @@ strong,b,th,dt{font-weight:600}
 @media (max-width:340px){.logo{font-size:0;gap:0}.site nav a{padding:8px 3px;font-size:12px}.site nav a::after{left:3px;right:3px}}
 /* Flame cursor on anything clickable; hotspot at the flame tip, pointer as fallback. Text inputs keep the text cursor. */
 a,button,summary,label[for],[role="button"],input[type="checkbox"],.check,.sortbtn,.copy{cursor:url("/cursor-flame.svg") 12 2,pointer}
+.demo-note{margin:0 0 16px;padding:12px 16px;max-width:68ch;border:1px solid var(--border);border-radius:8px;background:var(--surface);border-bottom:1px solid var(--border);font-size:14px;line-height:20px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0 0}
+.btn{display:inline-block;padding:10px 16px;border:1px solid var(--border);border-radius:8px;color:var(--text);text-decoration:none;font-weight:600}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.how{margin:16px 0 0;padding:0 0 0 22px;max-width:76ch}
+.how>li{padding-left:6px}.how>li+li{margin-top:20px}
+.how pre{margin:8px 0 0;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow-x:auto;max-width:100%}
+.how pre code{font-size:13px;line-height:20px;white-space:pre}
